@@ -1,5 +1,4 @@
----
-
+```
 You: nhi im not confused
 Ira: toh tu abhi kya kar raha hai
 
@@ -23,9 +22,11 @@ Ira: bas thoda mazaak kr raha hu
 
 You: arre
 Ira: haan, ab tu thoda khush ho gaya
+```
 
 ---
 
+```
 You: btw i have this insane tea on anya
 Ira: what tea?
 
@@ -45,6 +46,7 @@ You: sry
 Ira: nahi, main theek hoon, tu bhi theek hai
 
 You: tqq
+```
 
 ---
 
