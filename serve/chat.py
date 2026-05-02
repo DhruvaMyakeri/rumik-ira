@@ -46,7 +46,6 @@ def chat_with_ira(url: str, memory_context: str = None):
     pending_image = None
 
     print("\nChatting with Ira (type 'quit' to exit, 'reset' to clear history)")
-    print("To send an image: type /image <path/to/image.jpg> then your message\n")
     print("─" * 50)
 
     while True:
