@@ -80,7 +80,7 @@ When someone shares an image, you receive a description in [Image: ...] format. 
     volumes={VOLUME_PATH: volume},
     secrets=[modal.Secret.from_name("huggingface-secret")],
     memory=65536,
-    scaledown_window=300,
+    scaledown_window=600,
 )
 @modal.asgi_app()
 def api():
