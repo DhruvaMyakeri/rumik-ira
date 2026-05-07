@@ -60,7 +60,7 @@
 
     .app {
       width: 100%;
-      max-width: 760px;
+      max-width: 960px;
       height: 100vh;
       display: flex;
       flex-direction: column;
@@ -104,7 +104,7 @@
     }
 
     .header-name {
-      font-size: 15px;
+      font-size: 16px;
       font-weight: 500;
       letter-spacing: 0.04em;
       color: var(--text-primary);
@@ -231,7 +231,7 @@
     .memory-panel textarea {
       min-height: 60px;
       max-height: 120px;
-      font-size: 12.5px;
+      font-size: 14.5px;
       color: var(--text-secondary);
       border-color: var(--border-strong);
       background: var(--surface-3);
@@ -276,7 +276,7 @@
       padding: 11px 15px;
       border-radius: var(--radius-md);
       line-height: 1.55;
-      font-size: 14px;
+      font-size: 16.5px;
       font-weight: 400;
       white-space: pre-wrap;
       word-wrap: break-word;
@@ -378,7 +378,7 @@
       background: var(--surface-3);
       color: var(--text-primary);
       padding: 11px 14px;
-      font-size: 14px;
+      font-size: 16.5px;
       font-family: inherit;
       font-weight: 400;
       line-height: 1.5;
@@ -456,7 +456,7 @@
     /* optional caption text below the image */
     .img-card-caption {
       padding: 9px 12px 10px;
-      font-size: 13.5px;
+      font-size: 15.5px;
       font-weight: 400;
       line-height: 1.5;
       color: var(--user-color);
@@ -700,7 +700,7 @@
     // Two-phase system:
     //   1. DEBOUNCE (4s)  — Ira "notices" you've started talking
     //   2. GATHER  (10s)  — once she starts reading, she collects
-    //      all messages sent within 10s before replying as one batch
+    //      all messages sent within Gather_ms before replying as one batch
     //      Every new message resets the gather window (up to 10s total
     //      from first message in the gather phase).
     let pendingMessages = [];
@@ -965,21 +965,38 @@
 
       // Snapshot the file BEFORE clearImage() nulls selectedImage
       const imageFile = selectedImage;
-
-      // Build combined card (image + optional caption) in chat
-      const imgSrc = document.getElementById("imgPendingThumb").src;
       const fname = document.getElementById("imgPendingName").textContent;
+
+      // Generate base64 first — we need it for the API anyway, and using it
+      // as the img src guarantees it will render without Blob URL issues.
+      const base64 = await fileToBase64(imageFile);
+      const dataUrl = `data:${imageFile.type};base64,${base64}`;
+
       const card = document.createElement("div");
       card.className = "img-card";
-      card.innerHTML = `
-        <img class="preview" src="${imgSrc}" />
-        ${text ? `<div class="img-card-caption">${text}</div>` : ""}
-        <div class="img-card-label">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
-          </svg>
-          ${fname}
-        </div>`;
+
+      const previewImg = document.createElement("img");
+      previewImg.className = "preview";
+      previewImg.src = dataUrl;
+      previewImg.onerror = () => { previewImg.style.display = "none"; };
+
+      const labelEl = document.createElement("div");
+      labelEl.className = "img-card-label";
+      labelEl.innerHTML = `
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+        </svg>
+        ${fname}`;
+
+      card.appendChild(previewImg);
+      if (text) {
+        const cap = document.createElement("div");
+        cap.className = "img-card-caption";
+        cap.textContent = text;
+        card.appendChild(cap);
+      }
+      card.appendChild(labelEl);
+
       messagesEl.appendChild(card);
       messagesEl.scrollTop = messagesEl.scrollHeight;
 
@@ -994,8 +1011,6 @@
         if (pendingBefore.length) {
           history.push({ role: "user", content: pendingBefore.join("\n") });
         }
-
-        const base64 = await fileToBase64(imageFile);
 
         const res = await fetch(`${API_URL}/chat_image`, {
           method: "POST",
