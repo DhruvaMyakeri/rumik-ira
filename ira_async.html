@@ -156,6 +156,93 @@
       background: var(--accent-dim);
     }
 
+    .temp-control {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .temp-label {
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .temp-value {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      font-variant-numeric: tabular-nums;
+      min-width: 28px;
+      text-align: right;
+    }
+
+    input[type="range"].temp-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 72px;
+      height: 3px;
+      border-radius: 2px;
+      background: var(--border-strong);
+      outline: none;
+      cursor: pointer;
+    }
+
+    input[type="range"].temp-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+      transition: transform 0.15s ease;
+    }
+
+    input[type="range"].temp-slider::-webkit-slider-thumb:hover {
+      transform: scale(1.3);
+    }
+
+    /* ── Memory panel ──────────────────────────────── */
+
+    .memory-panel {
+      display: none;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(0, 0, 0, 0.25);
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .memory-panel.open {
+      display: flex;
+    }
+
+    .memory-panel-label {
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .memory-panel textarea {
+      min-height: 60px;
+      max-height: 120px;
+      font-size: 12.5px;
+      color: var(--text-secondary);
+      border-color: var(--border-strong);
+      background: var(--surface-3);
+      resize: vertical;
+    }
+
+    .memory-panel textarea::placeholder {
+      color: var(--text-muted);
+      font-style: italic;
+    }
+
     /* ── Messages ───────────────────────────────────── */
 
     .messages {
@@ -360,10 +447,10 @@
 
     .img-card img.preview {
       width: 100%;
+      height: 160px;
       display: block;
       border-radius: 0;
       object-fit: cover;
-      max-height: 200px;
     }
 
     /* optional caption text below the image */
@@ -472,7 +559,6 @@
       font-style: italic;
       animation: bubble-in 0.2s cubic-bezier(0.34, 1.2, 0.64, 1) both;
     }
-
   </style>
 </head>
 
@@ -489,6 +575,28 @@
 
     <div class="topbar">
       <button onclick="resetChat()">Reset</button>
+      <button id="memBtn" onclick="toggleMemory()">Memory</button>
+      <div class="temp-control">
+        <span class="temp-label">temp</span>
+        <input
+          type="range"
+          class="temp-slider"
+          id="tempSlider"
+          min="0.1" max="1.5" step="0.05" value="0.8"
+          oninput="document.getElementById('tempVal').textContent = parseFloat(this.value).toFixed(2)"
+        />
+        <span class="temp-value" id="tempVal">0.80</span>
+      </div>
+    </div>
+
+    <!-- Memory panel -->
+    <div class="memory-panel" id="memoryPanel">
+      <span class="memory-panel-label">about you — ira will remember this</span>
+      <textarea
+        id="memoryInput"
+        placeholder="e.g. works in tech, 23 years old, plays guitar, lives in Delhi…"
+        oninput="memoryContext = this.value.trim()"
+      ></textarea>
     </div>
 
     <div class="messages" id="messages"></div>
@@ -549,6 +657,15 @@
     let autoMode = false;
     let selectedImage = null;
     let generating = false;
+    let memoryContext = "";  // injected into every request as memory_context
+
+    function toggleMemory() {
+      const panel = document.getElementById('memoryPanel');
+      const btn = document.getElementById('memBtn');
+      const open = panel.classList.toggle('open');
+      btn.classList.toggle('active', open);
+      if (open) document.getElementById('memoryInput').focus();
+    }
 
     // Messages typed while API is in-flight — shown as ghost chips, drained to chat on next flush
     let bufferedMessages = [];
@@ -567,7 +684,7 @@
       }
       bar.style.display = 'flex';
       bar.innerHTML = bufferedMessages
-        .map(m => `<div class="msg-buffer-chip">${m.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>`)
+        .map(m => `<div class="msg-buffer-chip">${m.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>`)
         .join('');
     }
 
@@ -591,8 +708,8 @@
     let gatherTimer = null;
     let gatherStarted = false;
     let gatherStart = 0;
-    const DEBOUNCE_MS = 3000;   // initial pause after LAST message
-    const GATHER_MS = 3000;  // max window to collect more messages
+    const DEBOUNCE_MS = 4000;   // initial pause after LAST message
+    const GATHER_MS = 5000;  // max window to collect more messages
 
     // ── FLUSH QUEUE ───────────────────────────────────────
     // Prevents parallel API calls — if Ira is already responding
@@ -780,7 +897,9 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             history: serializeHistory(),
-            new_messages: messages   // backend joins these into one user turn
+            new_messages: messages,
+            temperature: parseFloat(document.getElementById('tempSlider').value),
+            ...(memoryContext && { memory_context: memoryContext })
           })
         });
 
@@ -885,7 +1004,8 @@
             history: serializeHistory(),
             message: text,
             image_base64: base64,
-            media_type: imageFile.type
+            media_type: imageFile.type,
+            ...(memoryContext && { memory_context: memoryContext })
           })
         });
 

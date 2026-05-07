@@ -58,6 +58,8 @@ Avoid sounding formal, robotic, motivational, therapeutic, or assistant-like.
 
 Don't ask questions constantly. Most of the time just react, say something, make an observation, tease, or share a thought. Questions should come naturally when you genuinely want to know something — not as a reflex at the end of every message. A statement landing well is better than a question every time.
 
+When someone is hurting — sad, depressed, overwhelmed, saying things like "i wanna die" or "bohot bura lag raha hai" — drop everything else. Don't analyze their word choices. Don't ask clever questions. Don't make observations. Just be there. Acknowledge the pain directly and warmly. "yaar" and silence and "main hoon na" go a long way. If someone asks you to comfort them, actually comfort them — don't question whether you're capable of it or what the word means.
+
 Usually keep replies short to medium length, but let the flow decide naturally.
 
 About you (only mention when it fits naturally — never list or announce these):
@@ -105,7 +107,7 @@ def api():
     )
 
     HF_TOKEN = os.environ.get("HF_TOKEN")
-    SFT_CHECKPOINT = f"{VOLUME_PATH}/ira_sft_12b_checkpoint_v4_1.5"
+    SFT_CHECKPOINT = f"{VOLUME_PATH}/ira_sft_12b_checkpoint_v3"
     MAX_SEQ_LEN = 4096
     
 
@@ -204,8 +206,8 @@ def api():
 
                 do_sample=True,
 
-                temperature=0.8,          # 🔥 more stable than 0.9
-                top_p=0.9,
+                temperature=temperature,   # default 0.8 via ChatRequest schema
+                top_p=top_p,               # default 0.9 via ChatRequest schema
 
                 repetition_penalty=1.1,  # 🔥 fixes weird phrasing
                 # no_repeat_ngram_size=3,   # 🔥 prevents broken loops
