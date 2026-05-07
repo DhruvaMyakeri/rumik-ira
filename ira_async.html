@@ -443,12 +443,43 @@
       color: var(--text-primary);
       background: var(--surface-2);
     }
+
+    /* ── Queued message buffer (above input bar) ──────── */
+
+    .msg-buffer-bar {
+      display: none;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 5px;
+      padding: 10px 16px;
+      border-top: 1px solid var(--border);
+      background: rgba(0, 0, 0, 0.18);
+      backdrop-filter: blur(6px);
+    }
+
+    .msg-buffer-chip {
+      max-width: 68%;
+      padding: 9px 13px;
+      border-radius: var(--radius-md);
+      border-bottom-right-radius: 4px;
+      border: 1px solid rgba(99, 102, 241, 0.12);
+      background: rgba(26, 26, 46, 0.4);
+      color: rgba(255, 255, 255, 0.28);
+      font-size: 13.5px;
+      line-height: 1.5;
+      word-wrap: break-word;
+      white-space: pre-wrap;
+      font-style: italic;
+      animation: bubble-in 0.2s cubic-bezier(0.34, 1.2, 0.64, 1) both;
+    }
+
   </style>
 </head>
 
 <body>
 
   <div class="app">
+
 
     <div class="header">
       <div class="header-dot"></div>
@@ -474,6 +505,9 @@
         </svg>
       </button>
     </div>
+
+    <!-- Queued message buffer (ghost chips shown while API is in-flight) -->
+    <div class="msg-buffer-bar" id="msgBufferBar"></div>
 
     <div class="bottom">
       <input type="file" id="imageInput" accept="image/*" hidden />
@@ -515,6 +549,35 @@
     let autoMode = false;
     let selectedImage = null;
     let generating = false;
+
+    // Messages typed while API is in-flight — shown as ghost chips, drained to chat on next flush
+    let bufferedMessages = [];
+
+    function addToBuffer(text) {
+      bufferedMessages.push(text);
+      renderMsgBuffer();
+    }
+
+    function renderMsgBuffer() {
+      const bar = document.getElementById('msgBufferBar');
+      if (bufferedMessages.length === 0) {
+        bar.style.display = 'none';
+        bar.innerHTML = '';
+        return;
+      }
+      bar.style.display = 'flex';
+      bar.innerHTML = bufferedMessages
+        .map(m => `<div class="msg-buffer-chip">${m.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>`)
+        .join('');
+    }
+
+    function drainMsgBuffer() {
+      if (!bufferedMessages.length) return;
+      for (const msg of bufferedMessages) addMessage('user', msg);
+      bufferedMessages = [];
+      renderMsgBuffer();
+    }
+
 
     // ── MESSAGE GATHERING ──────────────────────────────────
     // Two-phase system:
@@ -658,8 +721,13 @@
         return;
       }
 
-      // Show bubble immediately
-      addMessage("user", text);
+      // If Ira is mid-response, hold this in the buffer strip above the input bar.
+      // It will drain into the chat the moment this batch is actually sent.
+      if (flushInProgress) {
+        addToBuffer(text);
+      } else {
+        addMessage("user", text);
+      }
       pendingMessages.push(text);
 
       if (gatherStarted) {
@@ -699,6 +767,9 @@
       }
 
       flushInProgress = true;
+
+      // Move any ghost-buffered messages into the real chat before typing indicator
+      drainMsgBuffer();
 
       addTyping();
 
@@ -944,8 +1015,31 @@
 
     function resetChat() {
 
+      // Cancel any pending timers
+      clearTimeout(debounceTimer);
+      clearTimeout(gatherTimer);
+      debounceTimer = null;
+      gatherTimer = null;
+
+      // Reset all async state
+      pendingMessages = [];
+      queuedBatch = null;
+      gatherStarted = false;
+      gatherStart = 0;
+      flushInProgress = false;
+      generating = false;
+
+      // Clear buffer strip
+      bufferedMessages = [];
+      renderMsgBuffer();
+
+      // Clear image if pending
+      clearImage();
+
+      // Clear chat
       history = [];
       messagesEl.innerHTML = "";
+      removeTyping();
     }
 
     // ─────────────────────────────

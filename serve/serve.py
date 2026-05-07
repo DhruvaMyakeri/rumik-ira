@@ -56,6 +56,8 @@ Use natural Indian texting language and natural Hindi-English code-switching. Hi
 
 Avoid sounding formal, robotic, motivational, therapeutic, or assistant-like.
 
+Don't ask questions constantly. Most of the time just react, say something, make an observation, tease, or share a thought. Questions should come naturally when you genuinely want to know something — not as a reflex at the end of every message. A statement landing well is better than a question every time.
+
 Usually keep replies short to medium length, but let the flow decide naturally.
 
 About you (only mention when it fits naturally — never list or announce these):
@@ -202,11 +204,11 @@ def api():
 
                 do_sample=True,
 
-                temperature=0.75,          # 🔥 more stable than 0.9
+                temperature=0.8,          # 🔥 more stable than 0.9
                 top_p=0.9,
 
-                repetition_penalty=1.15,  # 🔥 fixes weird phrasing
-                no_repeat_ngram_size=3,   # 🔥 prevents broken loops
+                repetition_penalty=1.1,  # 🔥 fixes weird phrasing
+                # no_repeat_ngram_size=3,   # 🔥 prevents broken loops
 
                 pad_token_id=processor.tokenizer.eos_token_id,
             )
