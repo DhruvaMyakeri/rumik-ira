@@ -1,0 +1,1014 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ira</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+
+  <style>
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg: #0a0a0a;
+      --surface: #111111;
+      --surface-2: #181818;
+      --surface-3: #1f1f1f;
+      --border: rgba(255, 255, 255, 0.06);
+      --border-strong: rgba(255, 255, 255, 0.1);
+      --accent: #d4a574;
+      --accent-dim: rgba(212, 165, 116, 0.12);
+      --accent-glow: rgba(212, 165, 116, 0.2);
+      --text-primary: rgba(255, 255, 255, 0.92);
+      --text-secondary: rgba(255, 255, 255, 0.45);
+      --text-muted: rgba(255, 255, 255, 0.25);
+      --user-bg: #1a1a2e;
+      --user-border: rgba(99, 102, 241, 0.25);
+      --user-color: rgba(255, 255, 255, 0.88);
+      --radius-sm: 10px;
+      --radius-md: 16px;
+      --radius-lg: 22px;
+      --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    html,
+    body {
+      height: 100%;
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text-primary);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: stretch;
+    }
+
+    /* ── Layout ─────────────────────────────────────── */
+
+    .app {
+      width: 100%;
+      max-width: 760px;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      border-right: 1px solid var(--border);
+      position: relative;
+    }
+
+    /* ── Header ─────────────────────────────────────── */
+
+    .header {
+      padding: 20px 24px 18px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .header-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 8px var(--accent-glow);
+      animation: pulse-dot 3s ease-in-out infinite;
+    }
+
+    @keyframes pulse-dot {
+
+      0%,
+      100% {
+        opacity: 1;
+        transform: scale(1);
+      }
+
+      50% {
+        opacity: 0.5;
+        transform: scale(0.8);
+      }
+    }
+
+    .header-name {
+      font-size: 15px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      color: var(--text-primary);
+    }
+
+    .header-sub {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-weight: 400;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin-left: auto;
+    }
+
+    /* ── Topbar (controls) ──────────────────────────── */
+
+    .topbar {
+      display: flex;
+      gap: 8px;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(0, 0, 0, 0.2);
+    }
+
+    .topbar button {
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      background: transparent;
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-sm);
+      padding: 6px 14px;
+      cursor: pointer;
+      transition: color var(--transition), border-color var(--transition), background var(--transition);
+    }
+
+    .topbar button:hover {
+      color: var(--text-primary);
+      border-color: rgba(255, 255, 255, 0.2);
+      background: var(--surface-3);
+    }
+
+    .topbar button.active {
+      color: var(--accent);
+      border-color: var(--accent);
+      background: var(--accent-dim);
+    }
+
+    /* ── Messages ───────────────────────────────────── */
+
+    .messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 28px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--surface-3) transparent;
+    }
+
+    .messages::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    .messages::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .messages::-webkit-scrollbar-thumb {
+      background: var(--surface-3);
+      border-radius: 4px;
+    }
+
+    /* ── Bubbles ─────────────────────────────────────── */
+
+    .msg {
+      max-width: 68%;
+      padding: 11px 15px;
+      border-radius: var(--radius-md);
+      line-height: 1.55;
+      font-size: 14px;
+      font-weight: 400;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      animation: bubble-in 0.25s cubic-bezier(0.34, 1.2, 0.64, 1) both;
+    }
+
+    @keyframes bubble-in {
+      from {
+        opacity: 0;
+        transform: translateY(6px) scale(0.97);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    .user {
+      align-self: flex-end;
+      background: var(--user-bg);
+      border: 1px solid var(--user-border);
+      color: var(--user-color);
+      border-bottom-right-radius: 4px;
+    }
+
+    .ira {
+      align-self: flex-start;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+      border-bottom-left-radius: 4px;
+    }
+
+    /* ── Typing indicator ───────────────────────────── */
+
+    .typing {
+      align-self: flex-start;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-bottom-left-radius: 4px;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .typing-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      animation: typing-bounce 1.4s ease-in-out infinite;
+    }
+
+    .typing-dot:nth-child(2) {
+      animation-delay: 0.2s;
+    }
+
+    .typing-dot:nth-child(3) {
+      animation-delay: 0.4s;
+    }
+
+    @keyframes typing-bounce {
+
+      0%,
+      60%,
+      100% {
+        transform: translateY(0);
+        opacity: 0.35;
+      }
+
+      30% {
+        transform: translateY(-5px);
+        opacity: 1;
+      }
+    }
+
+    /* ── Bottom bar ─────────────────────────────────── */
+
+    .bottom {
+      border-top: 1px solid var(--border);
+      padding: 14px 16px;
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+      background: rgba(0, 0, 0, 0.25);
+      backdrop-filter: blur(8px);
+    }
+
+    textarea {
+      flex: 1;
+      resize: none;
+      min-height: 44px;
+      max-height: 120px;
+      border: 1px solid var(--border-strong);
+      outline: none;
+      border-radius: var(--radius-md);
+      background: var(--surface-3);
+      color: var(--text-primary);
+      padding: 11px 14px;
+      font-size: 14px;
+      font-family: inherit;
+      font-weight: 400;
+      line-height: 1.5;
+      transition: border-color var(--transition), background var(--transition);
+      overflow-y: auto;
+    }
+
+    textarea::placeholder {
+      color: var(--text-muted);
+    }
+
+    textarea:focus {
+      border-color: rgba(255, 255, 255, 0.18);
+      background: var(--surface-2);
+    }
+
+    /* ── Icon buttons ───────────────────────────────── */
+
+    .btn-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-strong);
+      background: var(--surface-3);
+      color: var(--text-secondary);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: color var(--transition), border-color var(--transition), background var(--transition);
+    }
+
+    .btn-icon:hover {
+      color: var(--text-primary);
+      border-color: rgba(255, 255, 255, 0.18);
+      background: var(--surface-2);
+    }
+
+    .btn-send {
+      background: var(--accent-dim);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .btn-send:hover {
+      background: rgba(212, 165, 116, 0.22);
+      border-color: rgba(212, 165, 116, 0.7);
+      color: var(--accent);
+    }
+
+    /* ── Image card ─────────────────────────────────── */
+
+    .img-card {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      overflow: hidden;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--user-border);
+      background: var(--user-bg);
+      max-width: 240px;
+      align-self: flex-end;
+      animation: bubble-in 0.25s cubic-bezier(0.34, 1.2, 0.64, 1) both;
+    }
+
+    .img-card img.preview {
+      width: 100%;
+      display: block;
+      border-radius: 0;
+      object-fit: cover;
+      max-height: 200px;
+    }
+
+    /* optional caption text below the image */
+    .img-card-caption {
+      padding: 9px 12px 10px;
+      font-size: 13.5px;
+      font-weight: 400;
+      line-height: 1.5;
+      color: var(--user-color);
+      border-top: 1px solid var(--user-border);
+    }
+
+    .img-card-label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 11px;
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      color: var(--text-secondary);
+      border-top: 1px solid var(--user-border);
+      background: rgba(99, 102, 241, 0.06);
+    }
+
+    .img-card-label svg {
+      flex-shrink: 0;
+      opacity: 0.55;
+    }
+
+    /* ── Pending image strip (above input bar) ──────── */
+
+    .img-pending {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 16px;
+      border-top: 1px solid var(--border);
+      background: rgba(0, 0, 0, 0.3);
+      animation: bubble-in 0.2s ease both;
+    }
+
+    .img-pending-thumb {
+      width: 44px;
+      height: 44px;
+      border-radius: 8px;
+      object-fit: cover;
+      border: 1px solid var(--user-border);
+      flex-shrink: 0;
+    }
+
+    .img-pending-name {
+      font-size: 12px;
+      color: var(--text-secondary);
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .img-pending-clear {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      border: 1px solid var(--border-strong);
+      background: var(--surface-3);
+      color: var(--text-secondary);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: color var(--transition), background var(--transition);
+    }
+
+    .img-pending-clear:hover {
+      color: var(--text-primary);
+      background: var(--surface-2);
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="app">
+
+    <div class="header">
+      <div class="header-dot"></div>
+      <span class="header-name">Ira</span>
+      <span class="header-sub">Online</span>
+    </div>
+
+    <div class="topbar">
+      <button onclick="resetChat()">Reset</button>
+    </div>
+
+    <div class="messages" id="messages"></div>
+
+    <!-- Pending image strip (shown between messages and bottom bar) -->
+    <div class="img-pending" id="imgPending" style="display:none;">
+      <img class="img-pending-thumb" id="imgPendingThumb" src="" alt="" />
+      <span class="img-pending-name" id="imgPendingName"></span>
+      <button class="img-pending-clear" onclick="clearImage()" title="Remove image">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+          stroke-linecap="round">
+          <line x1="18" y1="6" x2="6" y2="18" />
+          <line x1="6" y1="6" x2="18" y2="18" />
+        </svg>
+      </button>
+    </div>
+
+    <div class="bottom">
+      <input type="file" id="imageInput" accept="image/*" hidden />
+
+      <!-- Image attach icon -->
+      <button class="btn-icon" onclick="pickImage()" title="Attach image">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+          stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="3" />
+          <circle cx="8.5" cy="8.5" r="1.5" />
+          <polyline points="21 15 16 10 5 21" />
+        </svg>
+      </button>
+
+      <textarea id="input" placeholder="Message Ira…" rows="1"></textarea>
+
+      <!-- Send icon -->
+      <button class="btn-icon btn-send" onclick="sendMessage()" title="Send">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+          stroke-linecap="round" stroke-linejoin="round">
+          <line x1="22" y1="2" x2="11" y2="13" />
+          <polygon points="22 2 15 22 11 13 2 9 22 2" />
+        </svg>
+      </button>
+    </div>
+
+  </div>
+
+  <script>
+
+    const API_URL = "https://rumik-ai-2--ira-inference-service-api.modal.run";
+
+    // IMPORTANT:
+    // frontend now stores multimodal-compatible history
+    // matching Gemma chat template format
+
+    // history stored as plain {role, content: string} to match backend schema
+    let history = [];
+    let autoMode = false;
+    let selectedImage = null;
+    let generating = false;
+
+    // ── MESSAGE GATHERING ──────────────────────────────────
+    // Two-phase system:
+    //   1. DEBOUNCE (4s)  — Ira "notices" you've started talking
+    //   2. GATHER  (10s)  — once she starts reading, she collects
+    //      all messages sent within 10s before replying as one batch
+    //      Every new message resets the gather window (up to 10s total
+    //      from first message in the gather phase).
+    let pendingMessages = [];
+    let debounceTimer = null;
+    let gatherTimer = null;
+    let gatherStarted = false;
+    let gatherStart = 0;
+    const DEBOUNCE_MS = 3000;   // initial pause after LAST message
+    const GATHER_MS = 3000;  // max window to collect more messages
+
+    // ── FLUSH QUEUE ───────────────────────────────────────
+    // Prevents parallel API calls — if Ira is already responding
+    // and new messages arrive, they get held and sent right after.
+    let flushInProgress = false;
+    let queuedBatch = null;
+
+
+    // serialize history for API — backend expects content as plain string
+    function serializeHistory() {
+      return history.map(m => ({
+        role: m.role,
+        content: typeof m.content === "string"
+          ? m.content
+          : (m.content[0]?.text ?? "")
+      }));
+    }
+
+    const messagesEl = document.getElementById("messages");
+    const inputEl = document.getElementById("input");
+    const imageInput = document.getElementById("imageInput");
+
+    // ─────────────────────────────
+    // UI
+    // ─────────────────────────────
+
+    function addMessage(role, text) {
+
+      const div = document.createElement("div");
+      div.className = `msg ${role}`;
+      div.textContent = text;
+
+      messagesEl.appendChild(div);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+
+      return div;
+    }
+
+    function addTyping() {
+
+      const div = document.createElement("div");
+      div.className = "msg typing";
+      div.id = "typing";
+      div.innerHTML = `
+        <div class="typing-dot"></div>
+        <div class="typing-dot"></div>
+        <div class="typing-dot"></div>
+      `;
+
+      messagesEl.appendChild(div);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function removeTyping() {
+
+      const t = document.getElementById("typing");
+      if (t) t.remove();
+    }
+
+    // ─────────────────────────────
+    // IMAGE
+    // ─────────────────────────────
+
+    function pickImage() {
+      imageInput.click();
+    }
+
+    imageInput.addEventListener("change", e => {
+      selectedImage = e.target.files[0];
+
+      if (!selectedImage) return;
+
+      const url = URL.createObjectURL(selectedImage);
+
+      // Show the pending strip above the bottom bar — not in chat yet
+      document.getElementById("imgPendingThumb").src = url;
+      document.getElementById("imgPendingName").textContent = selectedImage.name || "image";
+      document.getElementById("imgPending").style.display = "flex";
+
+      inputEl.placeholder = "Add a message (optional)…";
+      inputEl.focus();
+    });
+
+    function clearImage() {
+      selectedImage = null;
+      imageInput.value = "";
+      document.getElementById("imgPending").style.display = "none";
+      document.getElementById("imgPendingThumb").src = "";
+      document.getElementById("imgPendingName").textContent = "";
+      inputEl.placeholder = "Message Ira…";
+    }
+
+    function fireGather() {
+      // Grab everything accumulated so far and fire
+      clearTimeout(gatherTimer);
+      gatherTimer = null;
+      gatherStarted = false;
+      gatherStart = 0;
+      const batch = [...pendingMessages];
+      pendingMessages = [];
+      flushPending(batch);
+    }
+
+    // ─────────────────────────────
+    // SEND  (debounce → gather)
+    // ─────────────────────────────
+
+    function sendMessage() {
+
+      const text = inputEl.value.trim();
+
+      if (!text && !selectedImage) return;
+
+      inputEl.value = "";
+
+      // Images: flush any pending text first, then send immediately
+      if (selectedImage) {
+        clearTimeout(debounceTimer);
+        clearTimeout(gatherTimer);
+        debounceTimer = null;
+        gatherTimer = null;
+        gatherStarted = false;
+        const batch = [...pendingMessages];
+        pendingMessages = [];
+        handleImageSend(text, batch);
+        return;
+      }
+
+      // Show bubble immediately
+      addMessage("user", text);
+      pendingMessages.push(text);
+
+      if (gatherStarted) {
+        // ── Already in gather phase ───────────────────────
+        // Reset the gather window, but respect the 10s cap from gatherStart
+        clearTimeout(gatherTimer);
+        const elapsed = Date.now() - gatherStart;
+        const remaining = Math.max(0, GATHER_MS - elapsed);
+        if (remaining <= 0) {
+          // Cap hit — fire immediately
+          fireGather();
+        } else {
+          gatherTimer = setTimeout(fireGather, remaining);
+        }
+      } else {
+        // ── Debounce phase — wait for initial pause ───────
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          debounceTimer = null;
+          // Transition to gather phase
+          gatherStarted = true;
+          gatherStart = Date.now();
+          gatherTimer = setTimeout(fireGather, GATHER_MS);
+        }, DEBOUNCE_MS);
+      }
+    }
+
+    // Sends a batch of text messages as one API call
+    async function flushPending(messages) {
+
+      if (!messages.length) return;
+
+      // If Ira is already responding, hold this batch — drain it after
+      if (flushInProgress) {
+        queuedBatch = queuedBatch ? [...queuedBatch, ...messages] : [...messages];
+        return;
+      }
+
+      flushInProgress = true;
+
+      addTyping();
+
+      try {
+
+        const res = await fetch(`${API_URL}/chat`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            history: serializeHistory(),
+            new_messages: messages   // backend joins these into one user turn
+          })
+        });
+
+        if (!res.ok) {
+          removeTyping();
+          console.error("chat error:", await res.text());
+          addMessage("ira", "server error");
+          flushInProgress = false;
+          return;
+        }
+
+        const data = await res.json();
+
+        removeTyping();
+
+        // Commit all queued messages as ONE user turn (backend already joins them)
+        history.push({ role: "user", content: messages.join("\n") });
+
+        // Show line-by-line with natural delay
+        await showLines(data.responses);
+
+        if (data.responses.length > 0) {
+          history.push({ role: "assistant", content: data.responses.join("\n") });
+        }
+
+      } catch (err) {
+        removeTyping();
+        addMessage("ira", "server error");
+        console.error(err);
+      }
+
+      flushInProgress = false;
+
+      // Drain any messages that arrived while Ira was responding
+      if (queuedBatch) {
+        const next = queuedBatch;
+        queuedBatch = null;
+        await flushPending(next);
+      } else if (pendingMessages.length > 0 && debounceTimer) {
+        // Messages sent while Ira's bubbles were appearing —
+        // cancel their debounce and flush them immediately as a follow-up
+        clearTimeout(debounceTimer);
+        debounceTimer = null;
+        const next = [...pendingMessages];
+        pendingMessages = [];
+        await flushPending(next);
+      }
+
+      // ─────────────────────────
+      // AUTO CONTINUE
+      // ─────────────────────────
+
+      if (autoMode) {
+        // Wait 15–30s, skip 40% of the time — keeps it natural, not spammy
+        if (Math.random() > 0.4) {
+          setTimeout(() => { initiateSilently(); }, Math.random() * 15000 + 15000);
+        }
+      }
+    }
+
+    // Image send: flushes any pending text first (as context), then image
+    async function handleImageSend(text, pendingBefore) {
+
+      // Snapshot the file BEFORE clearImage() nulls selectedImage
+      const imageFile = selectedImage;
+
+      // Build combined card (image + optional caption) in chat
+      const imgSrc = document.getElementById("imgPendingThumb").src;
+      const fname = document.getElementById("imgPendingName").textContent;
+      const card = document.createElement("div");
+      card.className = "img-card";
+      card.innerHTML = `
+        <img class="preview" src="${imgSrc}" />
+        ${text ? `<div class="img-card-caption">${text}</div>` : ""}
+        <div class="img-card-label">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+          </svg>
+          ${fname}
+        </div>`;
+      messagesEl.appendChild(card);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+
+      // Clear the pending strip
+      clearImage();
+
+      addTyping();
+
+      try {
+
+        // Flush any queued text messages as context before the image
+        if (pendingBefore.length) {
+          history.push({ role: "user", content: pendingBefore.join("\n") });
+        }
+
+        const base64 = await fileToBase64(imageFile);
+
+        const res = await fetch(`${API_URL}/chat_image`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            history: serializeHistory(),
+            message: text,
+            image_base64: base64,
+            media_type: imageFile.type
+          })
+        });
+
+        if (!res.ok) {
+          removeTyping();
+          console.error("chat_image error:", await res.text());
+          addMessage("ira", "server error");
+          return;
+        }
+
+        const data = await res.json();
+
+        removeTyping();
+
+        history.push({ role: "user", content: text || "[image]" });
+
+        await showLines(data.responses);
+
+        if (data.responses.length > 0) {
+          history.push({ role: "assistant", content: data.responses.join("\n") });
+        }
+
+        selectedImage = null;
+        imageInput.value = "";
+        inputEl.placeholder = "Message Ira…";
+
+      } catch (err) {
+        removeTyping();
+        addMessage("ira", "server error");
+        console.error(err);
+      }
+
+      if (autoMode) {
+        if (Math.random() > 0.4) {
+          setTimeout(() => { initiateSilently(); }, Math.random() * 15000 + 15000);
+        }
+      }
+    }
+
+    // ─────────────────────────────
+    // INITIATE
+    // ─────────────────────────────
+
+    async function manualInitiate() {
+      await initiateSilently();
+    }
+
+    async function initiateSilently() {
+
+      if (generating) return;
+
+      generating = true;
+
+      addTyping();
+
+      try {
+
+        const res = await fetch(`${API_URL}/initiate`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            history: serializeHistory()
+          })
+        });
+
+        // backend crashed
+        if (!res.ok) {
+
+          removeTyping();
+
+          console.error(await res.text());
+
+          generating = false;
+          return;
+        }
+
+        const data = await res.json();
+
+        removeTyping();
+
+        if (!data.responses || data.responses.length === 0) {
+          generating = false;
+          return;
+        }
+
+        // Show line-by-line with delay
+        await showLines(data.responses);
+
+        if (data.responses.length > 0) {
+          const joined = data.responses.join("\n");
+          const last = history[history.length - 1];
+
+          if (last && last.role === "assistant") {
+            last.content += "\n" + joined;
+          } else {
+            history.push({ role: "assistant", content: joined });
+          }
+        }
+
+      } catch (err) {
+
+        removeTyping();
+        console.error(err);
+      }
+
+      generating = false;
+    }
+
+    // ─────────────────────────────
+    // AUTO MODE
+    // ─────────────────────────────
+
+    function toggleAuto() {
+
+      autoMode = !autoMode;
+
+      const btn = document.getElementById("autoBtn");
+      btn.textContent = `Auto: ${autoMode ? 'ON' : 'OFF'}`;
+      btn.classList.toggle("active", autoMode);
+    }
+
+    // ─────────────────────────────
+    // RESET
+    // ─────────────────────────────
+
+    function resetChat() {
+
+      history = [];
+      messagesEl.innerHTML = "";
+    }
+
+    // ─────────────────────────────
+    // SHOW LINES  (staggered bubbles)
+    // ─────────────────────────────
+
+    // Takes an array of response strings, splits each on "\n",
+    // and shows every non-empty line as its own bubble with a
+    // natural random delay between them.
+    async function showLines(responses) {
+
+      const lines = responses
+        .flatMap(r => r.split("\n"))
+        .map(l => l.trim())
+        .filter(l => l.length > 0);
+
+      for (let i = 0; i < lines.length; i++) {
+        if (i > 0) {
+          // Brief pause so it feels like Ira is typing the next line
+          await new Promise(resolve =>
+            setTimeout(resolve, 500 + Math.random() * 400)
+          );
+        }
+        addMessage("ira", lines[i]);
+      }
+    }
+
+    // ─────────────────────────────
+    // HELPERS
+    // ─────────────────────────────
+
+    function fileToBase64(file) {
+
+      return new Promise((resolve, reject) => {
+
+        const reader = new FileReader();
+
+        reader.onload = () => {
+
+          resolve(reader.result.split(',')[1]);
+        };
+
+        reader.onerror = reject;
+
+        reader.readAsDataURL(file);
+      });
+    }
+
+    // ─────────────────────────────
+    // ENTER TO SEND
+    // ─────────────────────────────
+
+    inputEl.addEventListener("keydown", e => {
+
+      if (e.key === "Enter" && !e.shiftKey) {
+
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+  </script>
+
+</body>
+
+</html>

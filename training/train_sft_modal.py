@@ -72,7 +72,7 @@ def train():
 
     # ── CONFIG ───────────────────────────────────────────
     MODEL_NAME  = "unsloth/gemma-3-12b-it"
-    OUTPUT_DIR  = f"{VOLUME_PATH}/ira_sft_12b_checkpoint"
+    OUTPUT_DIR  = f"{VOLUME_PATH}/ira_sft_12b_checkpoint_v5_original"
     TRAIN_FILE  = f"{VOLUME_PATH}/ira_train.jsonl"
     VAL_FILE    = f"{VOLUME_PATH}/ira_val.jsonl"
     LORA_R      = 16
