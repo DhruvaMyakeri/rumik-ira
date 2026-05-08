@@ -1007,9 +1007,9 @@
 
       try {
 
-        // Flush any queued text messages as context before the image
+        // If there were pending text messages, send them as a separate chat call first
         if (pendingBefore.length) {
-          history.push({ role: "user", content: pendingBefore.join("\n") });
+          await flushPending(pendingBefore);
         }
 
         const res = await fetch(`${API_URL}/chat_image`, {
