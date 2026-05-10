@@ -1,6 +1,6 @@
-# Ira - Hinglish Companion AI
+# Ira — Hinglish Companion AI
 
-Ira is a companion AI built on Gemma 3 12B, fine-tuned to have conversations the way young Indians actually text - natural Hinglish, warm but not soft, funny without trying too hard.
+Ira is a companion AI built on Gemma 3 12B, fine-tuned to have conversations the way young Indians actually text — natural Hinglish, warm but not soft, funny without trying too hard.
 
 ---
 
@@ -8,20 +8,22 @@ Ira is a companion AI built on Gemma 3 12B, fine-tuned to have conversations the
 
 ```
 README.md
-final_report.md
+final_report.md          — full write-up: training, evals, decisions, failure modes
+pipeline.html            — visual flowcharts of the full pipeline (open in browser)
 serve/
-    serve.py          - FastAPI inference service (Modal.com)
-    chat.py           - CLI chat client
+    serve.py             — FastAPI inference service (Modal.com), multimodal
+    chat.py              — CLI chat client
+ira_async.html           — async web client (debounce/gather, image attach, buffer strip)
 training/
-    train_sft_modal.py  - SFT training script
-    data_prep.py        - Dataset preparation and formatting
+    train_sft_modal.py   — SFT training script
+    data_prep.py         — dataset preparation and formatting
 preference/
-    train_dpo_modal.py  - DPO training script
-    dpo_pairs_v2.json   - 41 hand-curated preference pairs
-    dpo_combined.jsonl  - 204 total preference pairs
+    train_dpo_modal.py   — DPO training script
+    dpo_pairs_v2.json    — 41 hand-curated preference pairs
+    dpo_combined.jsonl   — 204 total preference pairs
 evals/
-    eval_suite.py       - Evaluation script (base Gemma vs SFT Ira)
-    eval_results.json   - Full eval output
+    eval_suite.py        — evaluation script (base Gemma vs SFT Ira)
+    eval_results.json    — full eval output
 results/
     sft_training_logs.md
 ```
@@ -49,14 +51,11 @@ modal secret create huggingface-secret HF_TOKEN=your_token_here
 **SFT:**
 
 ```bash
-# prepare dataset
 python training/data_prep.py
-
-# upload data and train
 modal run training/train_sft_modal.py
 ```
 
-**DPO (optional, currently degrades quality - see report):**
+**DPO (optional — currently degrades quality, see report):**
 
 ```bash
 modal run preference/train_dpo_modal.py
@@ -72,50 +71,64 @@ modal run preference/train_dpo_modal.py
 modal deploy serve/serve.py
 ```
 
-**Chat:**
+Endpoint: `https://rumik-ai-2--ira-inference-service-api.modal.run`
 
-```bash
-pip install requests
-python serve/chat.py --url https://your-modal-url
-```
-
-**With memory context:**
-
-```bash
-python serve/chat.py --url https://your-modal-url --memory "user has exam tomorrow"
-```
-
-**Send an image:**
-
-```
-You: /image path/to/photo.jpg
-[Image description: ...]
-Image ready. Now type your message.
-You: dekh yeh banaya maine aaj
-Ira: yaar edges thodi burnt hain par honestly still looks good...
-```
+Cold start: ~90s. Warm inference: 1–3s. VRAM: ~13GB on A100 40GB.
 
 ---
 
 ## API
 
-`POST /chat`
+**`POST /chat`** — text conversation, consecutive user messages supported
 
 ```json
 {
-  "messages": [
-    { "role": "user", "content": "yaar aaj kuch acha nahi lag raha" }
-  ],
-  "memory_context": "user mentioned exam stress last week",
-  "image_description": "homemade chole bhature, slightly burnt edges",
-  "max_new_tokens": 200,
-  "temperature": 0.8
+  "history":        [{"role": "user", "content": "yaar"}],
+  "new_messages":   ["kuch bata", "kya ho raha"],
+  "memory_context": "user has exam tomorrow, mentioned anxiety last week",
+  "temperature":    0.8,
+  "max_new_tokens": 150
 }
 ```
 
-`GET /health` - GPU status, VRAM, load time
+`new_messages` accepts a list — multiple messages sent before Ira replied are batched into one user turn on the backend.
 
-`POST /describe` - base64 image to description (see report for known issues)
+**`POST /chat_image`** — send an image, Ira actually sees it
+
+```json
+{
+  "history":      [],
+  "message":      "dekh yeh banaya maine",
+  "image_base64": "...",
+  "media_type":   "image/jpeg"
+}
+```
+
+The image is passed directly through the Gemma 3 vision processor — no description injection.
+
+**`POST /initiate`** — Ira speaks first, or re-initiates after a pause
+
+```json
+{ "history": [] }
+```
+
+**`GET /health`** — GPU, VRAM, load time
+
+---
+
+## Web Client
+
+Open `ira_async.html` in a browser and point it at the Modal endpoint. No build step, no server.
+
+**Features:**
+
+- **Consecutive multi-message batching** — messages sent in a burst are collected and sent together. Ira waits for a 4s typing pause, then gathers for up to 5s before replying.
+- **Concurrent request guard** — messages typed while Ira is responding are held in a ghost buffer strip and sent immediately after. No parallel API calls, no server errors.
+- **Buffer strip with cancel** — queued messages appear as faded chips above the input bar. Each chip has an × button to remove it before it's sent.
+- **Image attach** — thumbnail preview strip before sending, optional caption, renders as an image card in chat.
+- **Multi-bubble responses** — when Ira sends two bubbles (emotional trigger or image), they appear with a natural staggered delay.
+- **Memory panel** — free-text context injected into every request.
+- **Temperature slider** — 0.1–1.5, live.
 
 ---
 
@@ -131,9 +144,14 @@ Runs 25 scenarios across 8 categories comparing base Gemma 3 12B vs SFT Ira. Res
 
 ## Model
 
-- Base: `unsloth/gemma-3-12b-it`
-- Method: QLoRA, rank 16, 2 epochs
-- Hardware: A100 40GB (Modal.com)
-- Checkpoint: stored on Modal volume `ira-training-vol`
+| | |
+|---|---|
+| Base | `google/gemma-3-12b-it` |
+| Method | QLoRA · rank 16 · alpha 32 · 2 epochs |
+| Hardware | A100 40GB (Modal.com) |
+| Train loss | 0.11 |
+| Checkpoint | Modal volume `ira-training-vol` |
+| Final model | SFT checkpoint (DPO degraded quality — not used) |
 
-Full details in `final_report.md`.
+Full details, failure analysis, and next steps in `final_report.md`.
+Pipeline flowcharts in `pipeline.html` (open in browser).
