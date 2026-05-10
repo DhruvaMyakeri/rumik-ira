@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Ira Pipeline Diagrams</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0d0d0d;
+      color: #e0e0e0;
+      font-family: 'Inter', system-ui, sans-serif;
+      padding: 48px 32px;
+    }
+
+    h1 {
+      font-size: 22px;
+      font-weight: 600;
+      color: #d4a574;
+      margin-bottom: 8px;
+      letter-spacing: 0.03em;
+    }
+
+    .subtitle {
+      font-size: 13px;
+      color: #555;
+      margin-bottom: 48px;
+    }
+
+    .section {
+      margin-bottom: 56px;
+    }
+
+    .section-title {
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #d4a574;
+      margin-bottom: 20px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #1e1e1e;
+    }
+
+    .mermaid {
+      background: #111;
+      border: 1px solid #1e1e1e;
+      border-radius: 12px;
+      padding: 32px;
+      overflow-x: auto;
+    }
+
+    /* timing diagram */
+    .timing {
+      background: #111;
+      border: 1px solid #1e1e1e;
+      border-radius: 12px;
+      padding: 32px 36px;
+      font-family: 'Menlo', 'Consolas', monospace;
+      font-size: 13px;
+      line-height: 2;
+      color: #aaa;
+      overflow-x: auto;
+      white-space: pre;
+    }
+
+    .timing .hl  { color: #d4a574; }
+    .timing .dim { color: #444; }
+    .timing .grn { color: #6fcf97; }
+  </style>
+</head>
+<body>
+
+  <h1>Ira · Pipeline Diagrams</h1>
+  <p class="subtitle">Training · Serving · Client Engineering</p>
+
+  <!-- ── 1. Full Pipeline ─────────────────────────────── -->
+  <div class="section">
+    <div class="section-title">1 — Full Training &amp; Serving Pipeline</div>
+    <div class="mermaid">
+flowchart TD
+    subgraph DATA["Data Collection · 732 total"]
+        D1["Ismeet/Khamba Podcasts · 147 convos"]
+        D2["Reddit Posts · r/India · r/bangalore · 111 convos"]
+        D3["Synthetic via Groq llama-3.3-70b · 425 convos"]
+        D4["Manual Curated · 49 convos"]
+    end
+
+    DATA --> PREP["Dataset Prep\nRemove Devanagari in assistant turns\nRemove banned phrases\nMax 1 question per reply · Shuffle\n677 train / 68 val"]
+
+    PREP --> SFT4B["QLoRA SFT — Gemma 3 4B\nrank 16 · 3 epochs\nResult: repetitive · memorized patterns"]
+    SFT4B --> UPGRADE["Upgrade to 12B · reduce to 2 epochs"]
+
+    UPGRADE --> SFT["QLoRA SFT — Gemma 3 12B Instruct\nrank 16 · alpha 32 · 2 epochs\nLR 2e-4 · effective batch 16 · A100 40GB · ~16 min"]
+    SFT --> CKPT["SFT Checkpoint v5\ntrain loss 0.11 · val loss 0.55"]
+
+    CKPT --> DPO["DPO Attempt\n204 preference pairs · beta 0.05 · 1 epoch\nHuggingFace TRL stack — no Unsloth"]
+    DPO --> DPOFAIL["Collapsed — nonsensical one-liners\nNot used as final model"]
+
+    CKPT --> SERVE
+
+    subgraph SERVE["Modal.com Inference Service — FastAPI"]
+        LOAD["google/gemma-3-12b-it · 4-bit NF4 BitsAndBytes\n+ PeftModel LoRA adapter · ~13GB VRAM"]
+        LOAD --> EP1["POST /chat\nnew_messages list · consecutive user turns"]
+        LOAD --> EP2["POST /chat_image\nPIL image in processor · native multimodal"]
+        LOAD --> EP3["POST /initiate\nIra speaks first or re-initiates"]
+        LOAD --> EP4["GET /health\nGPU · VRAM · latency"]
+    end
+
+    SERVE --> CLIENT["Web Client — ira_async.html"]
+
+    style DPOFAIL fill:#2a1a1a,stroke:#5a2a2a,color:#cc6666
+    style CKPT    fill:#1a2a1a,stroke:#2a5a2a,color:#6fcf97
+    style CLIENT  fill:#1a1a2a,stroke:#2a2a5a,color:#8888ff
+    </div>
+  </div>
+
+  <!-- ── 2. Backend Generation Flow ──────────────────── -->
+  <div class="section">
+    <div class="section-title">2 — Backend Generation Flow</div>
+    <div class="mermaid">
+flowchart TD
+    REQ["Incoming request — /chat or /chat_image"]
+
+    REQ --> BSP["build_system_prompt()\nBase Ira system prompt\n+ memory_context if provided\n+ image reaction instruction if /chat_image"]
+
+    BSP --> BUILD["Build full_messages\nsystem turn + history + new user turn\n(text only  or  image + text)"]
+
+    BUILD --> PASS1["First pass — generate()\napply_chat_template → tokenize → model.generate()\ndo_sample · temp · top_p\nrepetition_penalty 1.1 · no_repeat_ngram_size 3"]
+
+    PASS1 --> CLEAN1["clean_response()\nStrip role marker bleed — assistant / user / model"]
+
+    CLEAN1 --> CHECK{"should_continue() ?\nor force_continue=True for images"}
+
+    CHECK -->|"No — neutral / short"| RETURN["Return response1"]
+
+    CHECK -->|"Yes — emotional keyword\nor image request"| CONT["Append response1 + continuation prompt\nDifferent angle · not a question · brief"]
+
+    CONT --> PASS2["Second pass — generate()\nmax_new_tokens // 2"]
+    PASS2 --> CLEAN2["clean_response()"]
+
+    CLEAN2 --> VALID{"response2 valid?\nnot duplicate · len > 2 words"}
+    VALID -->|Yes| RETURN2["Return response1 + response2"]
+    VALID -->|No| RETURN
+
+    style RETURN  fill:#1a2a1a,stroke:#2a5a2a,color:#6fcf97
+    style RETURN2 fill:#1a2a1a,stroke:#2a5a2a,color:#6fcf97
+    </div>
+  </div>
+
+  <!-- ── 3. Client Message Flow ───────────────────────── -->
+  <div class="section">
+    <div class="section-title">3 — Client Message Flow</div>
+    <div class="mermaid">
+flowchart TD
+    INPUT["User presses Enter — sendMessage()"]
+
+    INPUT --> IMGCHECK{"Image attached?"}
+
+    IMGCHECK -->|Yes| IMGPATH
+
+    IMGCHECK -->|No| INFLIGHTCHECK{"flushInProgress?"}
+    INFLIGHTCHECK -->|Yes| BUFFER["addToBuffer(text)\nGhost chip in buffer strip\n+ cancel button"]
+    INFLIGHTCHECK -->|No| CHAT["addMessage('user', text)\nBubble appears in chat"]
+
+    BUFFER --> PEND["pendingMessages.push(text)"]
+    CHAT   --> PEND
+
+    PEND --> GCHECK{"gatherStarted?"}
+
+    GCHECK -->|No| DEB["debounce timer — 4 000 ms\nResets on each new message"]
+    DEB -->|pause detected| GS["gatherStarted = true\ngatherStart = Date.now()\ngather timer — 5 000 ms"]
+
+    GCHECK -->|Yes| GR["Reset gather window\nRespect 5s cap from gatherStart\nFire immediately if cap hit"]
+
+    GS --> FG["fireGather()\nbatch = pendingMessages snapshot\npendingMessages = []"]
+    GR --> FG
+
+    FG --> FP
+
+    subgraph FP["flushPending(batch)"]
+        direction TB
+        F1{"flushInProgress?"}
+        F1 -->|Yes| Q["Hold in queuedBatch\ndrain after current call completes"]
+        F1 -->|No| F2["flushInProgress = true\ndrainMsgBuffer — ghost chips → real bubbles\naddTyping()"]
+        F2 --> API["POST /chat\nhistory + new_messages + temp + memory_context"]
+        API --> R["removeTyping()\nhistory ← user turn\nawait showLines(responses)\nhistory ← assistant turn\nflushInProgress = false"]
+        R --> DR{"queuedBatch?"}
+        DR -->|Yes| DN["next = queuedBatch · queuedBatch = null\nawait flushPending(next)"]
+        DR -->|No| DONE["done"]
+    end
+
+    subgraph IMGPATH["handleImageSend(text, pendingBefore)"]
+        direction TB
+        I1["flushInProgress = true\nfileToBase64(imageFile)\nRender img-card in chat\nclearImage() — hide pending strip\naddTyping()"]
+        I1 --> I2{"pendingBefore\nmessages?"}
+        I2 -->|Yes| I3["await flushPending(pendingBefore)\nFlush text context before image"]
+        I2 -->|No| I4["POST /chat_image\nhistory + message + image_base64 + media_type"]
+        I3 --> I4
+        I4 --> I5["removeTyping()\nhistory ← user turn\nawait showLines(responses)\nhistory ← assistant turn\nflushInProgress = false"]
+        I5 --> I6{"queuedBatch?"}
+        I6 -->|Yes| I7["Drain via flushPending"]
+        I6 -->|No| I8["done"]
+    end
+
+    style BUFFER fill:#1a1a2a,stroke:#3a3a6a,color:#aaaaff
+    style Q      fill:#1a1a2a,stroke:#3a3a6a,color:#aaaaff
+    </div>
+  </div>
+
+  <!-- ── 4. showLines ─────────────────────────────────── -->
+  <div class="section">
+    <div class="section-title">4 — Staggered Bubble Reveal</div>
+    <div class="mermaid">
+flowchart LR
+    A["responses array from API"]
+    A --> B["flatMap on newline\ntrim · filter empty lines"]
+    B --> C["line 0\naddMessage instantly"]
+    C --> D["wait 500–900 ms\nrandom delay"]
+    D --> E["line 1\naddMessage"]
+    E --> F["wait 500–900 ms"]
+    F --> G["line N\naddMessage"]
+    </div>
+  </div>
+
+  <!-- ── 5. Timing ─────────────────────────────────────── -->
+  <div class="section">
+    <div class="section-title">5 — Consecutive Message Timing</div>
+    <div class="timing"><span class="hl">User</span>  <span class="dim">──</span><span class="hl">●</span><span class="dim">────</span><span class="hl">●</span><span class="dim">──────────────────</span><span class="hl">●</span><span class="dim">──────────────</span><span class="hl">●</span><span class="dim">─────────────────────────────────────▶</span>
+       msg1 msg2               msg3           msg4
+
+            <span class="dim">└────── 4s debounce resets ──────┘</span>
+                                <span class="dim">└─ gather phase starts</span>
+                                               <span class="dim">└──── 5s gather window ────┘</span>
+                                                                          <span class="dim">└──▶</span> <span class="grn">API call</span>
+                                                                               new_messages:
+                                                                               <span class="grn">["msg1", "msg2", "msg3", "msg4"]</span></div>
+  </div>
+
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'dark',
+      themeVariables: {
+        primaryColor:       '#1a1a2e',
+        primaryTextColor:   '#e0e0e0',
+        primaryBorderColor: '#333355',
+        lineColor:          '#555577',
+        secondaryColor:     '#111122',
+        tertiaryColor:      '#0d0d1a',
+        background:         '#111',
+        mainBkg:            '#1a1a2e',
+        nodeBorder:         '#333355',
+        clusterBkg:         '#0f0f1e',
+        titleColor:         '#d4a574',
+        edgeLabelBackground:'#111',
+        fontFamily:         'Inter, system-ui, sans-serif',
+        fontSize:           '13px',
+      }
+    });
+  </script>
+
+</body>
+</html>
