@@ -59,8 +59,8 @@ def train_dpo():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
     logger = logging.getLogger(__name__)
 
-    SFT_CHECKPOINT = f"{VOLUME_PATH}/ira_sft_12b_checkpoint"
-    OUTPUT_DIR     = f"{VOLUME_PATH}/ira_dpo_12b_checkpoint"
+    SFT_CHECKPOINT = f"{VOLUME_PATH}/ira_sft_gemma4_31b_checkpoint"
+    OUTPUT_DIR     = f"{VOLUME_PATH}/ira_dpo_gemma4_31b_checkpoint"
     DPO_DATA_FILE  = f"{VOLUME_PATH}/dpo_combined.jsonl"
     HF_TOKEN       = os.environ.get("HF_TOKEN")
     NUM_EPOCHS     = 1
@@ -80,7 +80,7 @@ def train_dpo():
     logger.info(f"Beta: {BETA} | LR: {LR} | Epochs: {NUM_EPOCHS}")
     logger.info("=" * 60)
 
-    from transformers import AutoModelForCausalLM, AutoTokenizer
+    from transformers import AutoModelForMultimodalLM, AutoTokenizer
     from peft import PeftModel
     from trl import DPOTrainer, DPOConfig
     from datasets import Dataset
@@ -102,7 +102,7 @@ def train_dpo():
         tokenizer.pad_token_id = tokenizer.eos_token_id
 
     logger.info("Loading base model in bf16...")
-    base_model = AutoModelForCausalLM.from_pretrained(
+    base_model = AutoModelForMultimodalLM.from_pretrained(
         BASE_MODEL,
         device_map="auto",
         torch_dtype=torch.bfloat16,

@@ -1,0 +1,60 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Environment
+.env
+
+# Large dataset files not needed for reproducibility
+broad_knowledge.jsonl
+ira_augmented.jsonl
+ira_hinglish_dataset.jsonl
+ira_hinglish_dataset_17b.jsonl
+ira_hinglish_dataset_70b.jsonl
+ira_dataset.jsonl
+ira_dataset_raw copy.jsonl
+ira_text_dataset_120b.jsonl
+ira_podcast.jsonl
+podcast_ira.jsonl
+dpo_dataset.jsonl
+
+# Raw source data
+ismeet_khamba.jsonl
+reddit.jsonl
+
+# Intermediate scripts not part of final pipeline
+augment_dataset.py
+build_hinglish_dataset.py
+datasetgroq.py
+debug_apis.py
+source_to_dataset.py
+sinle_api_dataset.py
+shuffle.py
+test_dpo_local.py
+inference_dpo.py
+inference_test.py
+reddit.py
+
+# Old checkpoints
+ira_sft_checkpoint/
+
+# Screenshots and misc
+Screenshot*.png
+gemini-code-*.json
+
+# Empty files
+dpo_combined.json
+
+# Scratch
+scratch/
+
+# Versioned train/val splits (reproducible from build_dataset.py)
+ira_train_v*.jsonl
+ira_val_v*.jsonl
+ira_pairs_sft.jsonl
+
+# Generated intermediate files
+generated_200.json
+generated_filtered.json
+ira_initiation_conversations.json

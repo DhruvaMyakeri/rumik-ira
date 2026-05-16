@@ -1,7 +1,7 @@
 """
 Ira SFT Training Script — Modal.com
-Model: Gemma 3 4B Instruct
-Method: QLoRA via Unsloth
+Model: Gemma 4 31B
+Method: QLoRA (4-bit NF4) + standard HF Trainer
 Hardware: A100 40GB on Modal
 """
 
@@ -13,29 +13,20 @@ CUDA_TAG = "12.4.0-devel-ubuntu22.04"
 
 app = modal.App("ira-sft-training")
 
-# ── IMAGE ────────────────────────────────────────────────
-# Start from NVIDIA CUDA image — this is the key fix
-# Unsloth needs CUDA dev tools pre-installed
 image = (
     modal.Image.from_registry(f"nvidia/cuda:{CUDA_TAG}", add_python="3.11")
     .apt_install("git", "build-essential")
     .pip_install(["torch", "torchvision", "torchaudio"])
     .pip_install([
-        "unsloth",
-        "unsloth_zoo",
         "bitsandbytes",
         "accelerate",
-        "xformers",
         "peft",
-        "trl",
-        "triton",
         "datasets",
-        "transformers",
+        "transformers>=4.50.0",
         "huggingface_hub",
         "sentencepiece",
         "protobuf",
         "tokenizers",
-        "rich",
         "scipy",
         "einops",
         "packaging",
@@ -45,7 +36,6 @@ image = (
 volume = modal.Volume.from_name("ira-training-vol", create_if_missing=True)
 VOLUME_PATH = "/vol"
 
-# ── TRAINING FUNCTION ────────────────────────────────────
 
 @app.function(
     image=image,
@@ -61,66 +51,81 @@ def train():
     import json
     import logging
     from datasets import Dataset
-    from unsloth import FastModel
-    from trl import SFTTrainer, SFTConfig
-
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(levelname)s - %(message)s"
+    from transformers import (
+        AutoProcessor,
+        Gemma4ForConditionalGeneration,
+        BitsAndBytesConfig,
+        TrainingArguments,
+        Trainer,
+        DataCollatorForLanguageModeling,
     )
+    from peft import LoraConfig, get_peft_model
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
     logger = logging.getLogger(__name__)
 
     # ── CONFIG ───────────────────────────────────────────
-    MODEL_NAME  = "unsloth/gemma-3-12b-it"
-    OUTPUT_DIR  = f"{VOLUME_PATH}/ira_sft_12b_checkpoint_v5_original"
-    TRAIN_FILE  = f"{VOLUME_PATH}/ira_train.jsonl"
-    VAL_FILE    = f"{VOLUME_PATH}/ira_val.jsonl"
+    MODEL_NAME  = "google/gemma-4-31B-it"
+    OUTPUT_DIR  = f"{VOLUME_PATH}/ira_sft_gemma4_31b_checkpoint_v3"
+    TRAIN_FILE  = f"{VOLUME_PATH}/ira_train_v3.jsonl"
+    VAL_FILE    = f"{VOLUME_PATH}/ira_val_v3.jsonl"
     LORA_R      = 16
     LORA_ALPHA  = 32
     NUM_EPOCHS  = 2
     BATCH_SIZE  = 1
-    GRAD_ACCUM  = 16         # effective batch = 16
+    GRAD_ACCUM  = 16
     LR          = 2e-4
     MAX_SEQ_LEN = 2048
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     logger.info("=" * 60)
-    logger.info("Ira SFT Training — Unsloth + Gemma 3 12B")
+    logger.info("Ira SFT Training — Gemma 4 31B")
     logger.info("=" * 60)
     logger.info(f"GPU: {torch.cuda.get_device_name(0)}")
     logger.info(f"VRAM: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
-    logger.info(f"Model: {MODEL_NAME}")
-    logger.info(f"LoRA rank: {LORA_R}, alpha: {LORA_ALPHA}")
-    logger.info(f"Epochs: {NUM_EPOCHS}, LR: {LR}")
-    logger.info(f"Effective batch size: {BATCH_SIZE * GRAD_ACCUM}")
 
-    # ── LOAD MODEL ───────────────────────────────────────
-    logger.info("Loading model...")
-    model, tokenizer = FastModel.from_pretrained(
-        model_name=MODEL_NAME,
-        max_seq_length=MAX_SEQ_LEN,
+    # ── LOAD PROCESSOR + MODEL ───────────────────────────
+    logger.info("Loading processor...")
+    processor = AutoProcessor.from_pretrained(MODEL_NAME, token=os.environ.get("HF_TOKEN"))
+    tokenizer = processor.tokenizer
+    tokenizer.pad_token = tokenizer.eos_token
+    tokenizer.padding_side = "right"
+
+    logger.info("Loading model in 4bit...")
+    bnb_config = BitsAndBytesConfig(
         load_in_4bit=True,
+        bnb_4bit_quant_type="nf4",
+        bnb_4bit_compute_dtype=torch.bfloat16,
+        bnb_4bit_use_double_quant=True,
+    )
+    model = Gemma4ForConditionalGeneration.from_pretrained(
+        MODEL_NAME,
+        quantization_config=bnb_config,
+        device_map="auto",
+        dtype=torch.bfloat16,
         token=os.environ.get("HF_TOKEN"),
+        attn_implementation="eager",
     )
 
     # ── APPLY LORA ───────────────────────────────────────
+    # Regex on full module path — only targets language_model layers,
+    # skipping vision_tower (Gemma4ClippableLinear not supported by PEFT).
     logger.info("Applying LoRA...")
-    model = FastModel.get_peft_model(
-        model,
+    lora_config = LoraConfig(
         r=LORA_R,
         lora_alpha=LORA_ALPHA,
         lora_dropout=0.05,
-        target_modules=[
-            "q_proj", "k_proj", "v_proj", "o_proj",
-            "gate_proj", "up_proj", "down_proj"
-        ],
+        target_modules=r".*language_model.*\.(q_proj|k_proj|v_proj|o_proj|gate_proj|up_proj|down_proj)",
         bias="none",
-        use_gradient_checkpointing="unsloth",
-        random_state=42,
+        task_type="CAUSAL_LM",
     )
+    model = get_peft_model(model, lora_config)
+    model.enable_input_require_grads()
+    model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
+    model.print_trainable_parameters()
 
-    # ── LOAD DATA ────────────────────────────────────────
+    # ── LOAD + TOKENIZE DATA ─────────────────────────────
     logger.info("Loading data...")
 
     def load_jsonl(path):
@@ -132,40 +137,46 @@ def train():
                     data.append(json.loads(line))
         return data
 
-    def format_conversation(example):
+    def format_and_tokenize(example):
         try:
             text = tokenizer.apply_chat_template(
                 example["messages"],
                 tokenize=False,
-                add_generation_prompt=False
+                add_generation_prompt=False,
             )
         except Exception:
             text = ""
             for msg in example["messages"]:
-                role = msg["role"]
-                content = msg["content"]
+                role, content = msg["role"], msg["content"]
                 if role == "system":
                     text += f"<start_of_turn>system\n{content}<end_of_turn>\n"
                 elif role == "user":
                     text += f"<start_of_turn>user\n{content}<end_of_turn>\n"
                 elif role == "assistant":
                     text += f"<start_of_turn>model\n{content}<end_of_turn>\n"
-        return {"text": text}
+
+        tokenized = tokenizer(
+            text,
+            truncation=True,
+            max_length=MAX_SEQ_LEN,
+            padding=False,
+        )
+        tokenized["labels"] = tokenized["input_ids"].copy()
+        return tokenized
 
     train_raw = load_jsonl(TRAIN_FILE)
     val_raw   = load_jsonl(VAL_FILE)
     logger.info(f"Train: {len(train_raw)}, Val: {len(val_raw)}")
 
     train_dataset = Dataset.from_list(train_raw).map(
-        format_conversation, remove_columns=["messages"]
+        format_and_tokenize, remove_columns=["messages"], num_proc=1
     )
     val_dataset = Dataset.from_list(val_raw).map(
-        format_conversation, remove_columns=["messages"]
+        format_and_tokenize, remove_columns=["messages"], num_proc=1
     )
-    logger.info(f"Sample:\n{train_dataset[0]['text'][:300]}")
 
     # ── TRAIN ────────────────────────────────────────────
-    training_args = SFTConfig(
+    training_args = TrainingArguments(
         output_dir=OUTPUT_DIR,
         num_train_epochs=NUM_EPOCHS,
         per_device_train_batch_size=BATCH_SIZE,
@@ -173,7 +184,7 @@ def train():
         gradient_accumulation_steps=GRAD_ACCUM,
         learning_rate=LR,
         weight_decay=0.001,
-        warmup_ratio=0.03,
+        warmup_steps=20,
         lr_scheduler_type="cosine",
         bf16=True,
         optim="adamw_8bit",
@@ -188,18 +199,18 @@ def train():
         greater_is_better=False,
         seed=42,
         report_to="none",
-        max_seq_length=MAX_SEQ_LEN,
-        dataset_text_field="text",
-        packing=False,
         dataloader_num_workers=0,
+        remove_unused_columns=False,
     )
 
-    trainer = SFTTrainer(
+    data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
+
+    trainer = Trainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
         eval_dataset=val_dataset,
-        tokenizer=tokenizer,
+        data_collator=data_collator,
     )
 
     logger.info("Starting training...")
@@ -222,7 +233,7 @@ def train():
         "max_seq_length": MAX_SEQ_LEN,
         "train_samples": len(train_raw),
         "val_samples": len(val_raw),
-        "quantization": "4bit QLoRA via Unsloth",
+        "quantization": "4bit NF4 QLoRA",
         "train_metrics": result.metrics,
     }
     with open(f"{OUTPUT_DIR}/training_config.json", "w") as f:

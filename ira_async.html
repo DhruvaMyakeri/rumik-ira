@@ -674,7 +674,7 @@
 
   <script>
 
-    const API_URL = "https://rumik-ai-2--ira-inference-service-api.modal.run";
+    const API_URL = "https://rumik-ai-2--ira-serve-ira-api.modal.run";
 
     // IMPORTANT:
     // frontend now stores multimodal-compatible history
@@ -749,7 +749,7 @@
     let gatherStarted = false;
     let gatherStart = 0;
     const DEBOUNCE_MS = 4000;   // initial pause after LAST message
-    const GATHER_MS = 5000;  // max window to collect more messages
+    const GATHER_MS = 2000;  // max window to collect more messages
 
     // ── FLUSH QUEUE ───────────────────────────────────────
     // Prevents parallel API calls — if Ira is already responding
@@ -1239,6 +1239,7 @@
 
       const lines = responses
         .flatMap(r => r.split("\n"))
+        .flatMap(l => l.split(/(?<=[.!?])\s+/))
         .map(l => l.trim())
         .filter(l => l.length > 0);
 

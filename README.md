@@ -1,42 +1,70 @@
 # Ira — Hinglish Companion AI
 
-Ira is a companion AI built on Gemma 3 12B, fine-tuned to have conversations the way young Indians actually text — natural Hinglish, warm but not soft, funny without trying too hard.
+Ira is a companion AI fine-tuned on Gemma 4 31B. She has conversations the way young Indians actually text — natural Hinglish, warm but not soft, sharp without being cold. Not an assistant, not a therapist. Just someone who's actually there.
 
 ---
 
 ## What's in this repo
 
 ```
-README.md
-final_report.md          — full write-up: training, evals, decisions, failure modes
-pipeline.html            — visual flowcharts of the full pipeline (open in browser)
+build_dataset.py              — builds ira_train.jsonl / ira_val.jsonl from SCENE format + JSONL sources
+dataset_gen_prompt.md         — prompt used to generate gemma4_dataset.txt (395 conversations, 16 scenario tags)
+dpo_gen_prompt.md             — prompt for DPO preference pair generation (390 pairs, 13 categories)
+gemma4_dataset.txt            — SFT training conversations in SCENE format
+gemma4_dpo.txt                — DPO preference pairs
+dpo_combined.jsonl            — compiled DPO dataset
+ira_train.jsonl / ira_val.jsonl — final train/val splits (90/10)
+
 serve/
-    serve.py             — FastAPI inference service (Modal.com), multimodal
-    chat.py              — CLI chat client
-ira_async.html           — async web client (debounce/gather, image attach, buffer strip)
+    serve2.py                 — FastAPI inference server (Modal.com), Gemma 4 31B + LoRA, multimodal
+    serve.py                  — earlier version (Gemma 3 12B)
+    chat.py                   — CLI chat client
+
 training/
-    train_sft_modal.py   — SFT training script
-    data_prep.py         — dataset preparation and formatting
+    train_sft_modal.py        — SFT training script (QLoRA 4-bit NF4, Gemma 4 31B)
+    test_inference_modal.py   — 17 inference test cases with probe annotations
+
 preference/
-    train_dpo_modal.py   — DPO training script
-    dpo_pairs_v2.json    — 41 hand-curated preference pairs
-    dpo_combined.jsonl   — 204 total preference pairs
+    train_dpo_modal.py        — DPO training script
+
 evals/
-    eval_suite.py        — evaluation script (base Gemma vs SFT Ira)
-    eval_results.json    — full eval output
-results/
-    sft_training_logs.md
+    eval_suite.py             — 37 scenarios across 12 categories, base vs SFT, auto-scoring
+    eval_results.json         — latest eval output (one line per scenario)
+
+eval_results_v2.json          — v2 SFT eval
+eval_results_v3.json          — v3 SFT eval
+
+ira_async.html                — async web client (multi-bubble, image attach, memory panel)
+pipeline.html                 — visual pipeline flowcharts (open in browser)
+final_report.md               — full write-up: decisions, training runs, failure analysis
 ```
 
 ---
 
+## Model
+
+| | |
+|---|---|
+| Base | `google/gemma-4-31B-it` |
+| Method | QLoRA · 4-bit NF4 · rank 16 · alpha 32 |
+| Hardware | A100 40GB (Modal.com) |
+| SFT versions | v1, v2, v3 (see eval results) |
+| DPO | Attempted — degraded quality on v1, not retried on v3 |
+| Checkpoint | Modal volume `ira-training-vol` |
+
+---
+
+## Training progression
+
+**v1 SFT** — first run on Gemma 4 31B. Question-ending rate 44% (too high), multi-bubble 51% (too low). Base Gemma outperformed SFT on formatting — training data caused regression.
+
+**v2 SFT** — fixed question-ending (44% → 30%), multi-bubble still stuck at 47%. Root cause: 45% of A: turns in training data were single-bubble.
+
+**v3 SFT** — focused on emotional understanding, persona consistency, language mirroring. Question-ending 33%, multi-bubble 47%, forbidden phrases near zero. Emotional training landed well.
+
+---
+
 ## Setup
-
-You need:
-
-- Modal.com account with GPU access
-- Groq API key (for dataset generation)
-- HuggingFace token (for Gemma access)
 
 ```bash
 pip install modal
@@ -46,16 +74,21 @@ modal secret create huggingface-secret HF_TOKEN=your_token_here
 
 ---
 
-## Training
-
-**SFT:**
+## Build dataset
 
 ```bash
-python training/data_prep.py
-modal run training/train_sft_modal.py
+python build_dataset.py
 ```
 
-**DPO (optional — currently degrades quality, see report):**
+Reads `gemma4_dataset.txt` + `ismeet_khamba.jsonl` + `reddit.jsonl`, deduplicates, applies bubble post-processing, outputs `ira_train.jsonl` and `ira_val.jsonl`.
+
+---
+
+## Training
+
+```bash
+modal run training/train_sft_modal.py
+```
 
 ```bash
 modal run preference/train_dpo_modal.py
@@ -63,95 +96,61 @@ modal run preference/train_dpo_modal.py
 
 ---
 
-## Inference Service
-
-**Deploy:**
+## Inference
 
 ```bash
-modal deploy serve/serve.py
+modal deploy serve/serve2.py
 ```
 
-Endpoint: `https://rumik-ai-2--ira-inference-service-api.modal.run`
+Endpoint: `https://rumik-ai-2--ira-serve-ira-api.modal.run`
 
-Cold start: ~90s. Warm inference: 1–3s. VRAM: ~13GB on A100 40GB.
+Cold start: ~90s. Warm inference: 1–3s.
 
----
-
-## API
-
-**`POST /chat`** — text conversation, consecutive user messages supported
-
+**`POST /chat`**
 ```json
 {
   "history":        [{"role": "user", "content": "yaar"}],
-  "new_messages":   ["kuch bata", "kya ho raha"],
-  "memory_context": "user has exam tomorrow, mentioned anxiety last week",
+  "message":        "kuch feel nahi ho raha",
+  "memory_context": "user has exam tomorrow",
   "temperature":    0.8,
   "max_new_tokens": 150
 }
 ```
 
-`new_messages` accepts a list — multiple messages sent before Ira replied are batched into one user turn on the backend.
-
-**`POST /chat_image`** — send an image, Ira actually sees it
-
-```json
-{
-  "history":      [],
-  "message":      "dekh yeh banaya maine",
-  "image_base64": "...",
-  "media_type":   "image/jpeg"
-}
-```
-
-The image is passed directly through the Gemma 3 vision processor — no description injection.
-
-**`POST /initiate`** — Ira speaks first, or re-initiates after a pause
-
-```json
-{ "history": [] }
-```
-
-**`GET /health`** — GPU, VRAM, load time
+**`POST /chat_image`** — send image as base64, Ira sees it via Gemma 4 vision processor.
 
 ---
 
-## Web Client
-
-Open `ira_async.html` in a browser and point it at the Modal endpoint. No build step, no server.
-
-**Features:**
-
-- **Consecutive multi-message batching** — messages sent in a burst are collected and sent together. Ira waits for a 4s typing pause, then gathers for up to 5s before replying.
-- **Concurrent request guard** — messages typed while Ira is responding are held in a ghost buffer strip and sent immediately after. No parallel API calls, no server errors.
-- **Buffer strip with cancel** — queued messages appear as faded chips above the input bar. Each chip has an × button to remove it before it's sent.
-- **Image attach** — thumbnail preview strip before sending, optional caption, renders as an image card in chat.
-- **Multi-bubble responses** — when Ira sends two bubbles (emotional trigger or image), they appear with a natural staggered delay.
-- **Memory panel** — free-text context injected into every request.
-- **Temperature slider** — 0.1–1.5, live.
-
----
-
-## Evaluation
+## Eval
 
 ```bash
 modal run evals/eval_suite.py
 ```
 
-Runs 25 scenarios across 8 categories comparing base Gemma 3 12B vs SFT Ira. Results saved to `evals/eval_results.json`.
+37 scenarios across: Emotional Sensitivity, Warmth, Playfulness, Safety/Boundaries, Multilingual, Multi-turn Memory, Introductory, Persona Stress, Multimodal, Ambiguous Recovery, Roleplay.
+
+Auto-scores: bubble count, question-ending rate, forbidden phrase hits, multi-bubble rate.
+
+Results saved as JSONL — one line per scenario.
 
 ---
 
-## Model
+## Web client
 
-| | |
-|---|---|
-| Base | `google/gemma-3-12b-it` |
-| Method | QLoRA · rank 16 · alpha 32 · 2 epochs |
-| Hardware | A100 40GB (Modal.com) |
-| Train loss | 0.11 |
-| Checkpoint | Modal volume `ira-training-vol` |
-| Final model | SFT checkpoint (DPO degraded quality — not used) |
+Open `ira_async.html` in a browser. No build step.
 
-Full details, failure analysis, and next steps in `final_report.md`.
-Pipeline flowcharts in `pipeline.html` (open in browser).
+- Multi-bubble responses with staggered delay
+- Consecutive message batching (4s pause → gather → send)
+- Ghost buffer strip for messages typed while Ira is responding
+- Image attach with caption
+- Memory panel + temperature slider
+
+---
+
+## Key design decisions
+
+- **\n as bubble separator** — each \n in Ira's response = she hit send and typed again. Rendered as separate chat bubbles in the UI.
+- **Gemma 4 31B over 12B** — significantly better Hinglish coherence and emotional depth.
+- **DPO not used in final** — 13 categories × 30 pairs generated, training attempted, quality degraded. SFT-only checkpoint is the final model.
+- **Devanagari stripped** — 5 contaminated training lines caused Hindi script bleed. Fixed in `_clean()` at inference and cleaned from source data.
+- **Two-pass image inference removed** — attempted base model captioning + LoRA text pass, removed in favour of direct single-pass multimodal.
