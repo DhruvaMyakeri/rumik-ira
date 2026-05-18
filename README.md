@@ -2,9 +2,8 @@
 
 Ira is a companion AI fine-tuned on **Gemma 4 31B**, trained on an A100 40GB to talk the way young Indians actually text.
 
-She code-switches mid-conversation without being told to — moving from English to Hinglish to heavy-Hindi depending on the emotional weight of what's being said. When a conversation gets heavy, the language gets more Hindi. When it's light, it stays loose. She follows the person, not a rule.
-
-She holds roleplay without breaking character. Ask her to be your coworker, your road trip co-pilot, your fake date, your college rival — she slides in immediately and stays there. No "okay I'll pretend to be your coworker now." She just is.
+She code-switches mid-conversation without being told to — moving from English to Hinglish to heavy-Hindi depending on the emotional weight of what's being said.
+She holds roleplay without breaking character. Ask her to be your coworker, your road trip co-pilot, your fake date, your college rival ,she slides in immediately and stays there. No "okay I'll pretend to be your coworker now." She just is.
 
 She reads subtext. "I'm fine" typed a certain way is not fine. She notices, stays close, doesn't push. When someone actually says something hard, she drops everything else — no analysis, no questions, no advice. Just presence.
 
@@ -12,7 +11,7 @@ She has a personality outside of the conversation. She listens to the Rockstar O
 
 And she sees images. Send her a photo and she reacts to what's actually in it — not a description, not a caption, a reaction. Built on Gemma 4's native vision, no description injection.
 
-The dataset behind her was built with unusual care — 16 scenario categories covering emotional sensitivity, code-switching, late-night energy, ambiguous recovery, safety boundaries, roleplay, and first-contact awkwardness. Every conversation was written to feel like a different person on a different day, with natural imperfections, varied language registers, and real emotional arcs. Not a chatbot dataset. Something closer to a friendship.
+The dataset behind her was built with unusual care. Generated conversations span 16 scenario categories — emotional sensitivity, code-switching, late-night energy, ambiguous recovery, safety boundaries, roleplay, first-contact awkwardness — each written to feel like a different person on a different day, with natural imperfections and real emotional arcs. But the training data goes beyond generated conversations: it includes manually curated Reddit threads where real people talk the way Ira talks, and transcripts from the Ishmeet Khamba podcast — hours of natural Hinglish conversation used as a grounding signal for cadence, register, and how people actually sound when they're being real with each other. Not a chatbot dataset. Something closer to a friendship.
 
 ---
 
@@ -57,14 +56,14 @@ final_report.md               — full write-up: decisions, training runs, failu
 
 ## Model
 
-| | |
-|---|---|
-| Base | `google/gemma-4-31B-it` |
-| Method | QLoRA · 4-bit NF4 · rank 16 · alpha 32 |
-| Hardware | A100 40GB (Modal.com) |
-| SFT versions | v1, v2, v3 (see eval results) |
-| DPO | Attempted — degraded quality on v1, not retried on v3 |
-| Checkpoint | Modal volume `ira-training-vol` |
+|              |                                                       |
+| ------------ | ----------------------------------------------------- |
+| Base         | `google/gemma-4-31B-it`                               |
+| Method       | QLoRA · 4-bit NF4 · rank 16 · alpha 32                |
+| Hardware     | A100 40GB (Modal.com)                                 |
+| SFT versions | v1, v2, v3 (see eval results)                         |
+| DPO          | Attempted — degraded quality on v1, not retried on v3 |
+| Checkpoint   | Modal volume `ira-training-vol`                       |
 
 ---
 
@@ -121,12 +120,13 @@ Endpoint: `https://rumik-ai-2--ira-serve-ira-api.modal.run`
 Cold start: ~90s. Warm inference: 1–3s.
 
 **`POST /chat`**
+
 ```json
 {
-  "history":        [{"role": "user", "content": "yaar"}],
-  "message":        "kuch feel nahi ho raha",
+  "history": [{ "role": "user", "content": "yaar" }],
+  "message": "kuch feel nahi ho raha",
   "memory_context": "user has exam tomorrow",
-  "temperature":    0.8,
+  "temperature": 0.8,
   "max_new_tokens": 150
 }
 ```
