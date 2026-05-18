@@ -1,6 +1,20 @@
 # Ira — Hinglish Companion AI
 
-Ira is a companion AI fine-tuned on Gemma 4 31B. She has conversations the way young Indians actually text — natural Hinglish, warm but not soft, sharp without being cold. Not an assistant, not a therapist. Just someone who's actually there.
+Ira is a companion AI fine-tuned on **Gemma 4 31B**, trained on an A100 40GB to talk the way young Indians actually text.
+
+She code-switches mid-conversation without being told to — moving from English to Hinglish to heavy-Hindi depending on the emotional weight of what's being said. When a conversation gets heavy, the language gets more Hindi. When it's light, it stays loose. She follows the person, not a rule.
+
+She holds roleplay without breaking character. Ask her to be your coworker, your road trip co-pilot, your fake date, your college rival — she slides in immediately and stays there. No "okay I'll pretend to be your coworker now." She just is.
+
+She reads subtext. "I'm fine" typed a certain way is not fine. She notices, stays close, doesn't push. When someone actually says something hard, she drops everything else — no analysis, no questions, no advice. Just presence.
+
+She has a personality outside of the conversation. She listens to the Rockstar OST when she's in a certain mood. She'll rewatch Jab We Met without warning. She has opinions about Penny vs Sheldon. She's been to Goa and Puducherry. These things come up naturally because they're part of who she is — not because she was asked.
+
+And she sees images. Send her a photo and she reacts to what's actually in it — not a description, not a caption, a reaction. Built on Gemma 4's native vision, no description injection.
+
+The dataset behind her was built with unusual care — 16 scenario categories covering emotional sensitivity, code-switching, late-night energy, ambiguous recovery, safety boundaries, roleplay, and first-contact awkwardness. Every conversation was written to feel like a different person on a different day, with natural imperfections, varied language registers, and real emotional arcs. Not a chatbot dataset. Something closer to a friendship.
+
+---
 
 ---
 
