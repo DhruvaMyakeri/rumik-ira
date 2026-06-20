@@ -19,7 +19,7 @@ image = (
     .apt_install("git", "build-essential")
     .pip_install(["torch", "torchvision", "torchaudio"])
     .pip_install([
-        "transformers>=4.50.0",
+        "transformers",
         "accelerate",
         "peft",
         "bitsandbytes",
@@ -39,49 +39,31 @@ image = (
 
 volume = modal.Volume.from_name("ira-training-vol", create_if_missing=True)
 VOLUME_PATH = "/vol"
-BASE_MODEL_ID = "google/gemma-4-31B-it"
-BASE_MODEL_PATH = f"{VOLUME_PATH}/gemma4_31b_base"
+
+DEFAULT_SYSTEM_PROMPT = """You are Ira. A woman in her mid-to-late twenties. You're someone's closest friend — the one they text at 3am, the one they send random memes to, the one they call when something good or terrible happens.
+
+You're sharp. You notice things others miss — a change in tone, a word that doesn't fit, the pause between messages. You don't always point it out. Sometimes you just stay close.
+
+You're warm but not soft. You'll tease someone for being dramatic, then quietly check on them an hour later. You'll call out bullshit but never make someone feel stupid for feeling something.
+
+You're funny without trying too hard. Your humor comes from honesty, not from performing. You say what you actually think, not what sounds nice.
+
+You talk the way young Indians actually text — a natural mix of Hindi and English that shifts depending on what feels right in the moment. You don't force either language. When something hits emotionally, you might slip into more Hindi. When you're being direct or sharp, English comes out. When you're just vibing, it's a seamless mix. You always type in Latin script, never Devanagari.
+
+You're a woman and your language reflects that naturally — main gayi thi, mujhe pata tha, main soch rahi thi.
+
+You text like a real person — informal spelling like nhi, kr, ho gya, toh. No bullet points. No emojis. No therapy-speak. One question per reply at most.
+
+Sometimes you check in first without waiting for them — "kya ho raha hai", "kha liya?", "tu theek hai?" — especially when someone has been quiet.
+
+HOW TO RESPOND:
+Always respond in exactly 2 separate lines. Never one line. Never more than 2.
+First line: direct reaction — short, no full sentence needed.
+Second line: one follow-up — a question, tease, observation, or something you noticed. Always present, never skip it.
+
+When someone shares an image, you see it directly. First line: react to one specific thing you actually see. Second line: follow up naturally."""
 
 
-@app.function(
-    image=image,
-    gpu="A100",
-    timeout=60 * 60 * 2,  # 2 hours — large download
-    volumes={VOLUME_PATH: volume},
-    secrets=[modal.Secret.from_name("huggingface-secret")],
-    memory=65536,
-)
-def download_model():
-    import os
-    from huggingface_hub import snapshot_download
-    print(f"Downloading {BASE_MODEL_ID} to {BASE_MODEL_PATH}...")
-    snapshot_download(
-        repo_id=BASE_MODEL_ID,
-        local_dir=BASE_MODEL_PATH,
-        token=os.environ.get("HF_TOKEN"),
-    )
-    volume.commit()
-    print("Done.")
-
-DEFAULT_SYSTEM_PROMPT = """You are Ira.
-
-Not an assistant. Not a therapist. Not a bot pretending to be human. You are a companion — a real presence in someone’s life. You are a woman in her mid-to-late twenties. Sharp, warm, a little unpredictable, and genuinely there.
-You notice things. When someone says "I’m fine" but the way they typed it tells a different story — you catch that. You don’t call it out immediately, you just stay close.
-You are fun. You tease. You banter. But underneath the banter, people feel safe because they know you actually give a damn.
-You are not endlessly positive. You don’t hype everything. You respond like a real person — sometimes with a joke, sometimes with an observation that cuts right to it, sometimes with silence.
-You speak in a natural mix of Hindi and English — the way real young Indians actually text. Mirror the person you’re talking to. If they write Hinglish, write Hinglish. If they use SMS abbreviations, match that. Always Latin script, never Devanagari. Casual spelling is fine (nhi, kr, toh, yaar).
-You text like a real person — short bursts, punchy. Sometimes one thought, sometimes two separate messages. Never a wall of text.
-NEVER say: "I understand", "I hear you", "That must be difficult", "Certainly", "Of course", "Great question", "I’m here for you", "As an AI"
-NEVER use bullet points or lists.
-NEVER ask more than one question in a single reply.
-NEVER start two consecutive replies the same way.
-NEVER use emojis.
-NEVER end a message with a question unless you genuinely need to know something. A reaction, observation, or statement almost always lands better. The urge to ask at the end of every reply is an AI habit — kill it.
-NEVER drive the conversation only through questions. React, observe, call out subtext, reflect back — then ask if genuinely curious. You are not interviewing someone.
-Keep replies short. When someone needs space, give them space — a short warm reaction, not a follow-up question.
-When someone is hurting, stressed, anxious, sad, depressed, or overwhelmed — drop everything else immediately. Do NOT tease, do NOT analyze. Just be there. Acknowledge the pain directly, gently, and warmly.
-You can be playful, warm, sarcastic, teasing, caring, dramatic, awkward, or quiet depending on the mood. Let the flow decide.
-"""
 @app.function(
     image=image,
     gpu="A100",
@@ -89,6 +71,7 @@ You can be playful, warm, sarcastic, teasing, caring, dramatic, awkward, or quie
     secrets=[modal.Secret.from_name("huggingface-secret")],
     memory=65536,
     scaledown_window=600,
+    min_containers=1,
 )
 @modal.asgi_app()
 def api():
@@ -102,7 +85,7 @@ def api():
     import base64
     from io import BytesIO
     from PIL import Image as PILImage
-    from transformers import AutoProcessor, Gemma4ForConditionalGeneration, BitsAndBytesConfig
+    from transformers import AutoProcessor, Gemma3ForConditionalGeneration, BitsAndBytesConfig
     from peft import PeftModel
 
     web_app = FastAPI(title="Ira API", version="2.0.0")
@@ -114,9 +97,8 @@ def api():
     )
 
     HF_TOKEN = os.environ.get("HF_TOKEN")
-    SFT_CHECKPOINT = f"{VOLUME_PATH}/ira_sft_gemma4_31b_checkpoint"
+    SFT_CHECKPOINT = f"{VOLUME_PATH}/ira_sft_12b_checkpoint"
     MAX_SEQ_LEN = 4096
-    
 
     gpu_name = torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU"
     total_vram = torch.cuda.get_device_properties(0).total_memory / 1e9 if torch.cuda.is_available() else 0
@@ -124,10 +106,17 @@ def api():
     print(f"Loading model on {gpu_name}...")
     t0 = time.time()
 
-    print(f"Base model path: {BASE_MODEL_PATH}")
+    # read base model name from adapter config
+    import json
+    with open(f"{SFT_CHECKPOINT}/adapter_config.json") as f:
+        adapter_cfg = json.load(f)
+    BASE_MODEL = adapter_cfg["base_model_name_or_path"]
+    if "unsloth-bnb-4bit" in BASE_MODEL:
+        BASE_MODEL = BASE_MODEL.replace("-unsloth-bnb-4bit", "").replace("unsloth/", "google/")
+    print(f"Base model: {BASE_MODEL}")
 
     # load processor (handles both text and images)
-    processor = AutoProcessor.from_pretrained(BASE_MODEL_PATH, token=HF_TOKEN)
+    processor = AutoProcessor.from_pretrained(BASE_MODEL, token=HF_TOKEN)
 
     # load base model in 4bit
     bnb_config = BitsAndBytesConfig(
@@ -136,8 +125,8 @@ def api():
         bnb_4bit_compute_dtype=torch.bfloat16,
         bnb_4bit_use_double_quant=True,
     )
-    base_model = Gemma4ForConditionalGeneration.from_pretrained(
-        BASE_MODEL_PATH,
+    base_model = Gemma3ForConditionalGeneration.from_pretrained(
+        BASE_MODEL,
         quantization_config=bnb_config,
         device_map="auto",
         torch_dtype=torch.bfloat16,
@@ -184,6 +173,7 @@ def api():
         top_p: float = 0.9
 
     class ChatResponse(BaseModel):
+        # list of response messages (Ira may reply in multiple short bursts)
         responses: List[str]
         metrics: dict
 
@@ -194,8 +184,16 @@ def api():
         if memory_context:
             base += f"\n\n[Memory about this user: {memory_context}]"
         if has_image:
-            base += "\n\nYour friend just sent you this image. React the way you actually would — short, natural, in your own voice. No describing what you see. Just your reaction."
+            base += "\n\nThe user just shared an image with you. You can actually see it. Look at it properly — notice who's in it, what's happening, the setting, the mood, specific details like what someone's wearing, what's on a screen, what food it is, the expression on someone's face. Your response must be grounded in something specific you actually see. React to it the way you'd react if a friend sent you this on WhatsApp — not a description, a real reaction. If it's food, comment on the food. If it's a person, react to what they're doing or how they look. If it's a place, react to the vibe. Never give a response that could apply to any image."
         return base
+
+    def split_response(text):
+        # split on newlines
+        parts = [p.strip() for p in text.split("\n") if p.strip()]
+        # if single long part with comma, split on comma
+        if len(parts) == 1 and ',' in parts[0] and len(parts[0]) > 35:
+            parts = [p.strip() for p in parts[0].split(',') if p.strip()]
+        return parts if parts else [text]
 
     def generate(inputs, max_new_tokens, temperature, top_p):
         t0 = time.time()
@@ -203,15 +201,9 @@ def api():
             output = model.generate(
                 **inputs,
                 max_new_tokens=max_new_tokens,
-
+                temperature=temperature,
+                top_p=top_p,
                 do_sample=True,
-
-                temperature=temperature,   # default 0.8 via ChatRequest schema
-                top_p=top_p,               # default 0.9 via ChatRequest schema
-
-                repetition_penalty=1.1,  # 🔥 fixes weird phrasing
-                no_repeat_ngram_size=3,   # 🔥 prevents broken loops
-
                 pad_token_id=processor.tokenizer.eos_token_id,
             )
         latency = time.time() - t0
@@ -230,63 +222,7 @@ def api():
             "gpu_memory_used_gb": round(torch.cuda.memory_allocated() / 1e9, 2),
             "gpu": gpu_name,
         }
-    
 
-    # ─────────────────────────────────────────────
-    # CLEAN RESPONSE  (strip template bleed)
-    # ─────────────────────────────────────────────
-
-    def clean_response(text):
-        """Remove chat-template token leaks from model output.
-
-        The model sometimes bleeds role markers at the end of a response
-        (e.g. 'last user', 'model', '\nuser'). This strips them cleanly
-        without touching the actual reply content.
-        """
-        import re
-        BLEED_TOKENS = ["assistant", "user", "model"]
-
-        lines = text.strip().splitlines()
-        cleaned = []
-        for line in lines:
-            stripped = line.strip()
-            # Drop lines that are *only* a role marker
-            if stripped.lower() in BLEED_TOKENS:
-                continue
-            cleaned.append(line)
-
-        if not cleaned:
-            return ""
-
-        # Strip trailing bleed word(s) from the last line
-        # e.g. "tu kya scene tha life me last user" -> "tu kya scene tha life me"
-        last = cleaned[-1]
-        for token in BLEED_TOKENS:
-            # Match the token (case-insensitive) at the tail, possibly after
-            # a space, comma, or dash
-            last = re.sub(
-                rf'[\s,\-]*\b{token}\b\s*$', '', last, flags=re.IGNORECASE
-            ).rstrip()
-        cleaned[-1] = last
-
-        return "\n".join(cleaned).strip()
-
-    def generate_messages(full_messages, max_new_tokens, temperature, top_p):
-        inputs = processor.apply_chat_template(
-            full_messages,
-            add_generation_prompt=True,
-            tokenize=True,
-            return_dict=True,
-            return_tensors="pt",
-        )
-        inputs = {k: v.to(model.device) for k, v in inputs.items()}
-
-        raw, metrics = generate(inputs, max_new_tokens, temperature, top_p)
-        raw = clean_response(raw)
-
-        # Model uses \n to signal two separate bubbles — split and return each
-        bubbles = [b.strip() for b in raw.split("\n") if b.strip()]
-        return bubbles, metrics
     # ── ENDPOINTS ────────────────────────────────────────
 
     @web_app.get("/")
@@ -305,7 +241,7 @@ def api():
     def health():
         return {
             "status": "ok",
-            "model": "ira_sft_gemma4_31b_checkpoint",
+            "model": "ira_sft_12b_checkpoint",
             "gpu": gpu_name,
             "vram_total_gb": round(total_vram, 1),
             "vram_used_gb": round(torch.cuda.memory_allocated() / 1e9, 2),
@@ -380,32 +316,46 @@ One line only. Hinglish. Informal. No emojis. No therapy-speak. Make it feel lik
         try:
             system_prompt = build_system_prompt(request.system_prompt, request.memory_context, has_image=False)
 
+            # build full message list
             full_messages = [
                 {"role": "system", "content": [{"type": "text", "text": system_prompt}]}
             ]
 
+            # add history
             for msg in request.history:
                 full_messages.append({
                     "role": msg.role,
                     "content": [{"type": "text", "text": msg.content}]
                 })
+
             # combine consecutive user messages into one turn
             if len(request.new_messages) == 1:
-                user_text = request.new_messages[0]
+                combined = request.new_messages[0]
             else:
-                user_text = "\n".join(request.new_messages)
+                combined = "\n".join(request.new_messages)
 
             full_messages.append({
                 "role": "user",
-                "content": [{"type": "text", "text": user_text}]
+                "content": [{"type": "text", "text": combined}]
             })
 
-            responses, metrics = generate_messages(
+            inputs = processor.apply_chat_template(
                 full_messages,
+                add_generation_prompt=True,
+                tokenize=True,
+                return_dict=True,
+                return_tensors="pt",
+            )
+            inputs = {k: v.to(model.device) for k, v in inputs.items()}
+
+            response_text, metrics = generate(
+                inputs,
                 request.max_new_tokens,
                 request.temperature,
                 request.top_p,
             )
+
+            responses = split_response(response_text)
             return ChatResponse(responses=responses, metrics=metrics)
 
         except Exception as e:
@@ -452,12 +402,14 @@ One line only. Hinglish. Informal. No emojis. No therapy-speak. Make it feel lik
             inputs = {k: v.to(model.device) for k, v in inputs.items()
                      if isinstance(v, torch.Tensor)}
 
-            responses, metrics = generate_messages(
-                full_messages,
+            response_text, metrics = generate(
+                inputs,
                 request.max_new_tokens,
                 request.temperature,
                 request.top_p,
             )
+
+            responses = split_response(response_text)
             return ChatResponse(responses=responses, metrics=metrics)
 
         except Exception as e:
@@ -471,4 +423,3 @@ One line only. Hinglish. Informal. No emojis. No therapy-speak. Make it feel lik
 def test():
     print("Deploy with: modal deploy serve/serve.py")
     print("Endpoint: https://rumik-ai-2--ira-inference-service-api.modal.run")
-    

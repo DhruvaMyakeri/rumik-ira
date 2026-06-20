@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ira</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #0c0c0d;
+    --surface: #161617;
+    --border: #252526;
+    --text: #e2e2de;
+    --muted: #555;
+    --accent: #b8f0a0;
+    --accent-dim: rgba(184, 240, 160, 0.06);
+    --user-bg: #1c1c1e;
+    --ira-bg: #111112;
+    --danger: #ff6b6b;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow: hidden;
+  }
+
+  /* grain overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 100;
+    opacity: 0.4;
+  }
+
+  header {
+    width: 100%;
+    max-width: 660px;
+    padding: 20px 20px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .header-left { display: flex; align-items: baseline; gap: 10px; }
+
+  .name {
+    font-family: 'DM Mono', monospace;
+    font-size: 20px;
+    font-weight: 400;
+    color: var(--accent);
+    letter-spacing: -1px;
+  }
+
+  .status {
+    font-size: 11px;
+    color: var(--muted);
+    font-weight: 400;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: pulse 2.5s ease infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.3; transform: scale(0.8); }
+  }
+
+  .header-right { display: flex; gap: 8px; align-items: center; }
+
+  .icon-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    transition: all 0.15s;
+  }
+
+  .icon-btn:hover { color: var(--text); border-color: var(--muted); }
+
+  #messages {
+    flex: 1;
+    width: 100%;
+    max-width: 660px;
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  .empty-state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 1px;
+  }
+
+  .empty-icon {
+    width: 40px;
+    height: 40px;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    color: var(--accent);
+    margin-bottom: 4px;
+  }
+
+  .message-group {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    animation: fadeUp 0.2s ease;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .message-group.user { align-items: flex-end; }
+  .message-group.ira { align-items: flex-start; }
+
+  .sender-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 1.5px;
+    color: var(--muted);
+    padding: 0 4px;
+    margin-bottom: 2px;
+    text-transform: uppercase;
+  }
+
+  .message-group.ira .sender-label { color: var(--accent); opacity: 0.6; }
+
+  .bubble {
+    max-width: 72%;
+    padding: 9px 13px;
+    border-radius: 14px;
+    font-size: 13.5px;
+    line-height: 1.55;
+    font-weight: 400;
+  }
+
+  .message-group.user .bubble {
+    background: var(--user-bg);
+    border: 1px solid var(--border);
+    border-bottom-right-radius: 4px;
+    color: var(--text);
+  }
+
+  .message-group.ira .bubble {
+    background: var(--ira-bg);
+    border: 1px solid var(--border);
+    border-bottom-left-radius: 4px;
+    color: var(--text);
+  }
+
+  .image-bubble {
+    max-width: 220px;
+    border-radius: 14px;
+    border-bottom-right-radius: 4px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    cursor: pointer;
+  }
+
+  .image-bubble img { width: 100%; display: block; }
+
+  .metrics {
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    color: var(--muted);
+    padding: 2px 4px;
+    opacity: 0.4;
+  }
+
+  .typing-group {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 3px;
+  }
+
+  .typing {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 10px 14px;
+    background: var(--ira-bg);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    border-bottom-left-radius: 4px;
+  }
+
+  .typing span {
+    width: 4px;
+    height: 4px;
+    background: var(--muted);
+    border-radius: 50%;
+    animation: bounce 1.3s ease infinite;
+  }
+
+  .typing span:nth-child(2) { animation-delay: 0.15s; }
+  .typing span:nth-child(3) { animation-delay: 0.3s; }
+
+  @keyframes bounce {
+    0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+    30% { transform: translateY(-5px); opacity: 1; }
+  }
+
+  .system-msg {
+    text-align: center;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    padding: 4px;
+    letter-spacing: 0.5px;
+  }
+
+  .system-msg.warn { color: var(--danger); opacity: 0.7; }
+
+  /* pending messages indicator */
+  .pending-bar {
+    width: 100%;
+    max-width: 660px;
+    padding: 4px 20px;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--accent);
+    opacity: 0;
+    transition: opacity 0.2s;
+    height: 20px;
+  }
+
+  .pending-bar.visible { opacity: 0.7; }
+
+  #input-area {
+    width: 100%;
+    max-width: 660px;
+    padding: 12px 20px 20px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .input-row {
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+  }
+
+  #input {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 9px 13px;
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    font-size: 13.5px;
+    font-weight: 400;
+    resize: none;
+    outline: none;
+    min-height: 40px;
+    max-height: 110px;
+    line-height: 1.5;
+    transition: border-color 0.15s;
+  }
+
+  #input:focus { border-color: #333; }
+  #input::placeholder { color: var(--muted); }
+
+  .btn-row { display: flex; gap: 6px; }
+
+  #send-btn {
+    background: var(--accent);
+    color: #0c0c0d;
+    border: none;
+    border-radius: 10px;
+    width: 40px;
+    height: 40px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 15px;
+    transition: opacity 0.15s, transform 0.1s;
+    font-weight: 600;
+  }
+
+  #send-btn:hover { opacity: 0.85; }
+  #send-btn:active { transform: scale(0.95); }
+  #send-btn:disabled { opacity: 0.25; cursor: not-allowed; }
+
+  #image-btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    border-radius: 10px;
+    width: 40px;
+    height: 40px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 15px;
+    transition: all 0.15s;
+  }
+
+  #image-btn:hover { color: var(--text); border-color: var(--muted); }
+  #image-btn.has-image { border-color: var(--accent); color: var(--accent); }
+
+  #file-input { display: none; }
+
+  .image-preview {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    background: var(--accent-dim);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+  }
+
+  .image-preview.visible { display: flex; }
+
+  .preview-thumb {
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
+    object-fit: cover;
+    border: 1px solid var(--border);
+  }
+
+  .preview-name { flex: 1; color: var(--accent); }
+
+  .preview-remove {
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 12px;
+    padding: 2px;
+    transition: color 0.15s;
+  }
+
+  .preview-remove:hover { color: var(--danger); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <div class="name">ira</div>
+    <div class="status">
+      <div class="dot"></div>
+      <span id="status-text">online</span>
+    </div>
+  </div>
+  <div class="header-right">
+    <button class="icon-btn" onclick="resetChat()" title="Reset conversation">&#8634;</button>
+  </div>
+</header>
+
+<div class="pending-bar" id="pending-bar"></div>
+
+<div id="messages">
+  <div class="empty-state" id="empty-state">
+    <div class="empty-icon">&#10022;</div>
+    <span>say something</span>
+  </div>
+</div>
+
+<div id="input-area">
+  <div class="image-preview" id="image-preview">
+    <img class="preview-thumb" id="preview-thumb" src="" alt="">
+    <span class="preview-name" id="preview-name">image attached</span>
+    <button class="preview-remove" onclick="removeImage()">&#10005;</button>
+  </div>
+  <div class="input-row">
+    <textarea id="input" placeholder="type here..." rows="1"></textarea>
+    <div class="btn-row">
+      <button id="image-btn" onclick="document.getElementById('file-input').click()" title="Attach image">&#8982;</button>
+      <button id="send-btn" onclick="sendMessage()">&#8593;</button>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="file-input" accept="image/*" onchange="handleImageSelect(event)">
+
+<script>
+const API = "https://rumik-ai-2--ira-inference-service-api.modal.run";
+
+let history = [];
+let pending = [];
+let generating = false;
+let debounceTimer = null;
+let pendingImage = null;
+
+const messages = document.getElementById("messages");
+const input = document.getElementById("input");
+const sendBtn = document.getElementById("send-btn");
+
+// ───── UI ─────
+
+function scroll() {
+  messages.scrollTop = messages.scrollHeight;
+}
+
+function removeEmptyState() {
+  const e = document.getElementById("empty-state");
+  if (e) e.remove();
+}
+
+function addUser(text, img) {
+  let g = messages.querySelector(".user.pending");
+  if (!g) {
+    g = document.createElement("div");
+    g.className = "message-group user pending";
+    g.innerHTML = '<div class="sender-label">you</div>';
+    messages.appendChild(g);
+  }
+  if (img) {
+    const d = document.createElement("div");
+    d.className = "image-bubble";
+    const i = document.createElement("img");
+    i.src = img;
+    d.appendChild(i);
+    g.appendChild(d);
+  }
+  if (text) {
+    const b = document.createElement("div");
+    b.className = "bubble";
+    b.textContent = text;
+    g.appendChild(b);
+  }
+  scroll();
+}
+
+function addIra(responses) {
+  const g = document.createElement("div");
+  g.className = "message-group ira";
+  g.innerHTML = '<div class="sender-label">ira</div>';
+  messages.appendChild(g);
+
+  responses.forEach((r, i) => {
+    setTimeout(() => {
+      const b = document.createElement("div");
+      b.className = "bubble";
+      b.textContent = r;
+      g.appendChild(b);
+      scroll();
+    }, i * 600);
+  });
+}
+
+function typing(show) {
+  document.getElementById("typing-indicator")?.remove();
+  if (!show) return;
+
+  const t = document.createElement("div");
+  t.id = "typing-indicator";
+  t.className = "typing-group";
+  t.innerHTML = '<div class="sender-label" style="color:var(--accent)">ira</div>' +
+    '<div class="typing"><span></span><span></span><span></span></div>';
+  messages.appendChild(t);
+  scroll();
+}
+
+// ───── INPUT ─────
+
+input.addEventListener("input", () => {
+  input.style.height = "auto";
+  input.style.height = Math.min(input.scrollHeight, 110) + "px";
+});
+
+input.addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    // Enter = immediate send (no debounce)
+    sendMessage();
+  }
+});
+
+// Called by the send button
+function sendMessage() {
+  clearTimeout(debounceTimer);
+  debounceTimer = null;
+  _enqueue(true);
+}
+
+// Internal: collect the current input into pending queue
+// immediate=true → call flush() right now
+// immediate=false → start/restart the debounce timer
+function _enqueue(immediate) {
+  const text = input.value.trim();
+  if (!text && !pendingImage) return;
+
+  removeEmptyState();
+  addUser(text, pendingImage);
+
+  if (text) {
+    pending.push({ type: "text", content: text });
+    input.value = "";
+    input.style.height = "auto";
+  }
+
+  if (pendingImage) {
+    pending.push({ type: "image", content: pendingImage });
+    pendingImage = null;
+    document.getElementById("image-preview").classList.remove("visible");
+    document.getElementById("image-btn").classList.remove("has-image");
+  }
+
+  // If we're already generating, just queue; flush will re-run after.
+  if (generating) return;
+
+  if (immediate) {
+    flush();
+  } else {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(flush, 1200);
+  }
+}
+
+// ───── CORE ─────
+
+async function flush() {
+  if (pending.length === 0 || generating) return;
+
+  const batch = [...pending];
+  pending = [];
+
+  generating = true;
+  sendBtn.disabled = true;
+
+  document.querySelector(".user.pending")?.classList.remove("pending");
+  typing(true);
+
+  let texts = [];
+  let img = null;
+
+  batch.forEach(m => {
+    if (m.type === "text") texts.push(m.content);
+    if (m.type === "image") img = m;
+  });
+
+  try {
+    let res;
+
+    if (img) {
+      const base64 = img.content.split(",")[1];
+      res = await fetch(`${API}/chat_image`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          history,
+          message: texts.join(" "),
+          image_base64: base64,
+          media_type: "image/jpeg"
+        })
+      });
+    } else {
+      res = await fetch(`${API}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          history,
+          new_messages: texts
+        })
+      });
+    }
+
+    if (!res.ok) throw new Error(`server error ${res.status}`);
+
+    const data = await res.json();
+
+    typing(false);
+
+    // Push to history only after confirmed success
+    if (img) {
+      history.push({ role: "user", content: texts.join(" ") || "[image]" });
+    } else {
+      history.push({ role: "user", content: texts.join("\n") });
+    }
+
+    history.push({
+      role: "assistant",
+      content: data.responses.join("\n")
+    });
+
+    addIra(data.responses);
+
+  } catch (e) {
+    typing(false);
+    addIra(["error — try again"]);
+    console.error(e);
+  }
+
+  generating = false;
+  sendBtn.disabled = false;
+
+  // Flush any messages queued while we were generating
+  if (pending.length > 0) {
+    setTimeout(flush, 200);
+  }
+}
+
+// ───── IMAGE ─────
+
+function handleImageSelect(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = ev => {
+    pendingImage = ev.target.result;
+    document.getElementById("preview-thumb").src = pendingImage;
+    document.getElementById("preview-name").textContent = file.name;
+    document.getElementById("image-preview").classList.add("visible");
+    document.getElementById("image-btn").classList.add("has-image");
+  };
+  reader.readAsDataURL(file);
+  // Reset so the same file can be selected again later
+  e.target.value = "";
+}
+
+function removeImage() {
+  pendingImage = null;
+  document.getElementById("preview-thumb").src = "";
+  document.getElementById("preview-name").textContent = "image attached";
+  document.getElementById("image-preview").classList.remove("visible");
+  document.getElementById("image-btn").classList.remove("has-image");
+  document.getElementById("file-input").value = "";
+}
+
+// ───── RESET ─────
+
+function resetChat() {
+  history = [];
+  pending = [];
+  generating = false;
+  clearTimeout(debounceTimer);
+  debounceTimer = null;
+  removeImage();
+  sendBtn.disabled = false;
+  messages.innerHTML =
+    '<div class="empty-state" id="empty-state">' +
+    '<div class="empty-icon">&#10022;</div>' +
+    '<span>say something</span>' +
+    '</div>';
+}
+</script>
+</body>
+</html>
